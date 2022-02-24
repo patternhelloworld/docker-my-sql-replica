@@ -1,7 +1,9 @@
 /master/data/*
+/master/etc/*
 /master/log/*
 /master/file/*
 /slave/data/*
+/slave/etc/*
 /slave/log/*
 /slave/file/*
 .env

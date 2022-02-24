@@ -10,7 +10,7 @@ services:
     environment:
       MYSQL_USER: ${MYSQL_REMOTE_USER_MASTER}
       MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_MASTER}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD_MASTER}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       TZ: Asia/Seoul
     ports:
       - '${EXPOSE_PORT_MASTER}:3306'
@@ -19,6 +19,7 @@ services:
       - ${MYSQL_DATA_PATH_MASTER}:/var/lib/mysql
       - ${MYSQL_FILE_PATH_MASTER}:/var/lib/mysql-files
       - ${MYSQL_LOG_PATH_MASTER}:/var/log/mysql
+      - ${MYSQL_ETC_PATH_MASTER}:/var/tmp
     networks:
       - net-mysql
   
@@ -32,7 +33,7 @@ services:
     environment:
       MYSQL_USER: ${MYSQL_REMOTE_USER_SLAVE}
       MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_SLAVE}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD_SLAVE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       TZ: Asia/Seoul
     ports:
       - '${EXPOSE_PORT_SLAVE}:3306'
@@ -41,6 +42,7 @@ services:
       - ${MYSQL_DATA_PATH_SLAVE}:/var/lib/mysql
       - ${MYSQL_FILE_PATH_SLAVE}:/var/lib/mysql-files
       - ${MYSQL_LOG_PATH_SLAVE}:/var/log/mysql
+      - ${MYSQL_ETC_PATH_SLAVE}:/var/tmp
     networks:
       - net-mysql
   
