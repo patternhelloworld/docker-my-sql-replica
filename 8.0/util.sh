@@ -14,7 +14,3 @@ get_value_from_env(){
 
   echo ${value} # return.
 }
-
-get_not_empty_value_from_env(){
-  get_value_from_env
-}

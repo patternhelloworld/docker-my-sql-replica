@@ -109,7 +109,7 @@ restart_docker() {
 
   docker-compose down
 
-  docker-compose build --no-cache
+  docker-compose build --no-cache || (echo "Check if your docker is available." && exit 1)
 
   if [[ ${separated_mode} == true ]]; then
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
@@ -213,54 +213,43 @@ get_db_master_bin_log_pos() {
   fi
 }
 
-_main() {
-
-  cache_global_vars
-  prepare_volumes
-  restart_docker
-
-  echo -e "Waiting for DB to be up..."
-  # If the following error comes up, that means the DB is not yet up, so we need to give it a proper time to be up.
-  # ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)
-  wait_until_db_up "${master_container_name}" "${master_root_password}"
-  wait_until_db_up "${slave_container_name}" "${slave_root_password}"
-
+cache_global_vars_after_d_up() {
   db_master_ip=$(get_db_master_ip)
   db_slave_ip=$(get_db_slave_ip)
   db_master_bin_log_file=$(get_db_master_bin_log_file)
   db_master_bin_log_pos=$(get_db_master_bin_log_pos)
+}
 
-  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
-    docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${db_slave_ip}' IDENTIFIED BY '${replication_password}';"
-    docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${db_slave_ip}' WITH GRANT OPTION;"
-    docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
-    docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH TABLES WITH READ LOCK;"
-    docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "UNLOCK TABLES;"
-  fi
+create_replication_user(){
+    if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
+      docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${db_slave_ip}' IDENTIFIED BY '${replication_password}';"
+      docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${db_slave_ip}' WITH GRANT OPTION;"
+      docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
+      docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH TABLES WITH READ LOCK;"
+      docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "UNLOCK TABLES;"
+    fi
+}
 
-  # docker exec -it ${master_container_name} mysqldump -uroot -ppassword –all-databases –master-data > /var/tmp/data.sql
-
-  # docker exec -it ${slave_container_name} rm -rf /var/lib/mysql/*
-  # docker exec -it ${slave_container_name} mysqld -uroot -ppassword --initialize-insecure --basedir=/usr/ --datadir=/var/lib/mysql --user=mysql
-  # docker exec -it ${slave_container_name} mysqldump -uroot -ppassword < /var/tmp/data.sql
-
-  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
+show_current_db_status(){
+    if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
       echo -e "Master DB List"
       docker exec -it ${master_container_name} mysql -uroot -p${master_root_password} -e "show databases;"
-  elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
+    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
       echo -e "Slave DB List"
       docker exec -it ${slave_container_name} mysql -uroot -p${slave_root_password} -e "show databases;"
-  fi
+    fi
 
-  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
+    if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
       echo -e "Current Master DB settings"
       docker exec -it ${master_container_name} cat /etc/mysql/my.cnf
-  elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
+    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
       echo -e "Current Slave DB settings"
       docker exec -it ${slave_container_name} cat /etc/mysql/my.cnf
-  fi
+    fi
+}
 
-  if [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
+connect_slave_to_master(){
+    if [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
       echo -e "Stopping Slave..."
       docker exec -it ${slave_container_name} mysql -uroot -p${slave_root_password} -e "STOP SLAVE;"
       docker exec -it ${slave_container_name} mysql -uroot -p${slave_root_password} -e "RESET SLAVE ALL;"
@@ -270,7 +259,41 @@ _main() {
       docker exec -it ${slave_container_name} mysql -uroot -p${slave_root_password} -e "START SLAVE;"
       echo -e "Current Replication Status"
       docker exec -it ${slave_container_name} mysql -uroot -p${slave_root_password} -e "SHOW SLAVE STATUS\G;"
-  fi
+    fi
+}
+
+
+_main() {
+
+  # Set global variables BEFORE DOCKER IS UP
+  cache_global_vars
+
+  prepare_volumes
+
+  restart_docker
+
+  # If the following error comes up, that means the DB is not yet up, so we need to give it a proper time to be up.
+  # ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)
+  echo -e "Waiting for DB to be up..."
+  wait_until_db_up "${master_container_name}" "${master_root_password}"
+  wait_until_db_up "${slave_container_name}" "${slave_root_password}"
+
+  # Set global variables AFTER DB IS UP
+  cache_global_vars_after_d_up
+
+  # MASTER ONLY
+  create_replication_user
+
+  # docker exec -it ${master_container_name} mysqldump -uroot -ppassword –all-databases –master-data > /var/tmp/data.sql
+
+  # docker exec -it ${slave_container_name} rm -rf /var/lib/mysql/*
+  # docker exec -it ${slave_container_name} mysqld -uroot -ppassword --initialize-insecure --basedir=/usr/ --datadir=/var/lib/mysql --user=mysql
+  # docker exec -it ${slave_container_name} mysqldump -uroot -ppassword < /var/tmp/data.sql
+
+  show_current_db_status
+
+  # SLAVE ONLY
+  connect_slave_to_master
 
 }
 _main

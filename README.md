@@ -9,6 +9,7 @@ To Start or do recovery process must be [simple](https://github.com/Andrew-Kang-
 Run this simply after coordinating some values on .env.example
 
 ```
+$ cd 8.0
 $ cp -a .env.example .env
 $ bash run-replica.sh
 ```
