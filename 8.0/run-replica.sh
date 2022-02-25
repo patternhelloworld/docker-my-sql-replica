@@ -15,6 +15,7 @@ source ./util.sh
 cache_global_vars() {
   # Read .env
   emergency_recovery=$(get_value_from_env "EMERGENCY_RECOVERY")
+  docker_layer_corruption_recovery=$(get_value_from_env "DOCKER_LAYER_CORRUPTION_RECOVERY")
 
   separated_mode=$(get_value_from_env "SEPARATED_MODE")
   separated_mode_who_am_i=$(get_value_from_env "SEPARATED_MODE_WHO_AM_I")
@@ -152,7 +153,17 @@ restart_docker() {
 
   docker-compose down
 
-  docker-compose build --no-cache || (echo "Check if your docker is available." && exit 1)
+  if [[ ${docker_layer_corruption_recovery} == true ]]; then
+      docker image prune -f
+      docker rmi 80_db-master
+      docker rmi 80_db-slave
+  fi
+
+  if [[ ${docker_layer_corruption_recovery} == true ]]; then
+    docker-compose build --no-cache || (echo "Check if your docker is available." && exit 1)
+  else
+    docker-compose build || (echo "Check if your docker is available." && exit 1)
+  fi
 
   if [[ ${separated_mode} == true ]]; then
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
