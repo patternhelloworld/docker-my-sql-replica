@@ -1,4 +1,4 @@
-# My-SQL-Replica
+# Docker-My-SQL-Replica
 
 > Run Master-Slave MySQL DB and Cope with emergency with robust scripts.  
 
