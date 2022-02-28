@@ -257,7 +257,7 @@ get_db_master_bin_log_pos() {
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
       echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $2'})
     elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      echo $(docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
+      echo $(docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
     fi
   elif [[ ${separated_mode} == false ]]; then
     echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $2'})
@@ -279,8 +279,6 @@ create_replication_user(){
       docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${db_slave_ip}' IDENTIFIED BY '${replication_password}';"
       docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${db_slave_ip}' WITH GRANT OPTION;"
       docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
-      docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH TABLES WITH READ LOCK;"
-      docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "UNLOCK TABLES;"
     fi
 }
 
@@ -304,7 +302,9 @@ show_current_db_status(){
 
 connect_slave_to_master(){
     if [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
+
       echo -e ""
+
       echo -e "Stopping Slave..."
       docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "STOP SLAVE;"
       docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "RESET SLAVE ALL;"
@@ -324,6 +324,53 @@ connect_slave_to_master(){
     fi
 }
 
+slave_health () {
+  echo -e "Checking replication health..."
+  status=$(docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "SHOW SLAVE STATUS\G")
+  echo "$status" | egrep 'Slave_(IO|SQL)_Running:|Seconds_Behind_Master:|Last_.*_Error:' | grep -v "Error: $"
+  if ! echo "$status" | grep -qs "Slave_IO_Running: Yes"    ||
+     ! echo "$status" | grep -qs "Slave_SQL_Running: Yes"   ||
+     ! echo "$status" | grep -qs "Seconds_Behind_Master: 0" ; then
+	echo WARNING: Replication is not healthy.
+    return 1
+  fi
+  return 0
+}
+
+check_slave_health(){
+  counter=0
+  while ! slave_health; do
+    if (( counter >= 5 )); then
+      echo ERROR: Replication is NOT healthy.
+  	break
+      exit 1
+    fi
+    let counter=counter+1
+    sleep 2
+  done
+
+  echo SUCCESS: Replication is healthy.
+}
+
+lock_all(){
+  echo -e "Lock all the tables in Master"
+  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
+    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH TABLES WITH READ LOCK;"
+  elif [[ ${separated_mode_who_am_i} == "slave" && ${separated_mode} == true ]]; then
+    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "FLUSH TABLES WITH READ LOCK;"
+  fi
+}
+
+unlock_all(){
+  echo -e "Unlock all the tables in Master"
+  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
+    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "UNLOCK TABLES;"
+  elif [[ ${separated_mode_who_am_i} == "slave" && ${separated_mode} == true ]]; then
+    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "UNLOCK TABLES;"
+  fi
+}
+
+
 
 _main() {
 
@@ -331,6 +378,9 @@ _main() {
   cache_global_vars
 
   if [[ ${slave_emergency_recovery} == true && ${separated_mode} == false ]]; then
+
+    docker-compose down
+
     echo -e "Remove all slave data"
     sudo rm -rf ${mysql_data_path_slave}
   fi
@@ -356,7 +406,15 @@ _main() {
     exit 1
   fi
 
+
   # Now DB is up from this point on....
+
+  # MASTER ONLY
+  create_replication_user
+
+  show_current_db_status
+
+  lock_all
 
   if [[ ${slave_emergency_recovery} == true && ${separated_mode} == false ]]; then
 
@@ -381,13 +439,12 @@ _main() {
   # Set global variables AFTER DB IS UP
   cache_global_vars_after_d_up
 
-  # MASTER ONLY
-  create_replication_user
-
-  show_current_db_status
-
   # SLAVE ONLY
   connect_slave_to_master
+
+  unlock_all
+
+  check_slave_health
 
 }
 _main
