@@ -167,9 +167,9 @@ restart_docker() {
 
   if [[ ${separated_mode} == true ]]; then
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      docker-compose run -d --service-ports db-master
+        docker-compose up -d db-master
     elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      docker-compose run -d --service-ports db-slave
+        docker-compose up -d db-slave
     fi
   elif [[ ${separated_mode} == false ]]; then
     docker-compose up -d
@@ -242,7 +242,7 @@ get_db_master_bin_log_file() {
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
       echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $1'})
     elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -p${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $1'})
+      echo $(docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $1'})
     fi
   elif [[ ${separated_mode} == false ]]; then
     echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $1'})
@@ -257,7 +257,7 @@ get_db_master_bin_log_pos() {
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
       echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $2'})
     elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -p${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
+      echo $(docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
     fi
   elif [[ ${separated_mode} == false ]]; then
     echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $2'})
@@ -308,8 +308,15 @@ connect_slave_to_master(){
       echo -e "Stopping Slave..."
       docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "STOP SLAVE;"
       docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "RESET SLAVE ALL;"
-      echo -e "Point Slave to Master (IP : ${db_master_ip}, Bin Log File : ${db_master_bin_log_file}, , Bin Log File Pos : ${db_master_bin_log_pos})"
-      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${db_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
+
+      echo -e "Point Slave to Master (IP : ${db_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
+
+      if [[ ${separated_mode} == true ]]; then
+        docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${db_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1, MASTER_PORT=${separated_mode_master_port};"
+      else
+        docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${db_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
+      fi
+
       echo -e "Starting Slave..."
       docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "START SLAVE;"
       echo -e "Current Replication Status"
@@ -334,8 +341,20 @@ _main() {
   # If the following error comes up, that means the DB is not yet up, so we need to give it a proper time to be up.
   # ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)
   echo -e "Waiting for DB to be up..."
-  wait_until_db_up "${master_container_name}" "${master_root_password}"
-  wait_until_db_up "${slave_container_name}" "${slave_root_password}"
+
+  if [[ ${separated_mode} == true ]]; then
+    if [[ ${separated_mode_who_am_i} == "master" ]]; then
+        wait_until_db_up "${master_container_name}" "${master_root_password}"
+    elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
+        wait_until_db_up "${slave_container_name}" "${slave_root_password}"
+    fi
+  elif [[ ${separated_mode} == false ]]; then
+      wait_until_db_up "${master_container_name}" "${master_root_password}"
+      wait_until_db_up "${slave_container_name}" "${slave_root_password}"
+  else
+    echo "SEPARATED_MODE on .env : empty"
+    exit 1
+  fi
 
   # Now DB is up from this point on....
 
