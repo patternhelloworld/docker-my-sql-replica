@@ -14,7 +14,7 @@ source ./util.sh
 
 cache_global_vars() {
   # Read .env
-  emergency_recovery=$(get_value_from_env "EMERGENCY_RECOVERY")
+  slave_emergency_recovery=$(get_value_from_env "SLAVE_EMERGENCY_RECOVERY")
   docker_layer_corruption_recovery=$(get_value_from_env "DOCKER_LAYER_CORRUPTION_RECOVERY")
 
   separated_mode=$(get_value_from_env "SEPARATED_MODE")
@@ -330,7 +330,7 @@ _main() {
   # Set global variables BEFORE DOCKER IS UP
   cache_global_vars
 
-  if [[ ${emergency_recovery} == true && ${separated_mode} == false ]]; then
+  if [[ ${slave_emergency_recovery} == true && ${separated_mode} == false ]]; then
     echo -e "Remove all slave data"
     sudo rm -rf ${mysql_data_path_slave}
   fi
@@ -358,7 +358,7 @@ _main() {
 
   # Now DB is up from this point on....
 
-  if [[ ${emergency_recovery} == true && ${separated_mode} == false ]]; then
+  if [[ ${slave_emergency_recovery} == true && ${separated_mode} == false ]]; then
 
        echo  "Create Master Back Up SQL"
        docker exec ${master_container_name} sh -c 'exec mysqldump -uroot -p'${master_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
