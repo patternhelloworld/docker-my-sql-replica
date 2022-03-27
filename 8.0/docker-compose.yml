@@ -20,6 +20,7 @@ services:
       - ${MYSQL_FILE_PATH_MASTER}:/var/lib/mysql-files
       - ${MYSQL_LOG_PATH_MASTER}:/var/log/mysql
       - ${MYSQL_ETC_PATH_MASTER}:/var/tmp
+      - ./master/my.cnf:/etc/mysql/my.cnf
     networks:
       - net-mysql
   
@@ -43,6 +44,7 @@ services:
       - ${MYSQL_FILE_PATH_SLAVE}:/var/lib/mysql-files
       - ${MYSQL_LOG_PATH_SLAVE}:/var/log/mysql
       - ${MYSQL_ETC_PATH_SLAVE}:/var/tmp
+      - ./slave/my.cnf:/etc/mysql/my.cnf
     networks:
       - net-mysql
   

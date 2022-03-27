@@ -11,6 +11,12 @@ Run this simply after coordinating some values on .env.example
 ```
 $ cd 8.0
 $ cp -a .env.example .env
+
+# What to set '.env' ?
+## [Security] Set values for 'MYSQL_ROOT_PASSWORD', 'MYSQL_REPLICATION_USER_PASSWORD_MASTER'
+## [Safety] Consider setting the following 8 variables to be outside the project root.
+## MYSQL_..._PATH_...=./master/data
+
 $ bash run-replica.sh
 ```
 
@@ -26,7 +32,7 @@ SEPARATED_MODE=false
 
 ## Separated Mode (.env)
 
-The mode is for Master & Slave to be deployed on each instance. Make sure firewalls are open on your network layer. All the commands and .envs are the same for both Master and Slave.
+The mode is for Master & Slave to be deployed on each instance. Make sure firewalls are open on your network layer. All the commands that you should run and .envs are the same for both Master and Slave.
 
 - .env
 ```

@@ -1,4 +1,8 @@
 #!/bin/bash
+sudo bash ./prevent-crlf.sh
+echo "[NOTICE] To prevent CRLF errors on Windows, CRLF->LF ... "
+sleep 3
+source ./util.sh
 
 # pipefail
 # If set, the return value of a pipeline is the value of the last (rightmost) command to exit with a non-zero status, or zero if all commands in the pipeline exit successfully. This option is disabled by default.
@@ -6,11 +10,6 @@
 #set -eu
 # Prevent 'bash' from matching null as string
 #shopt -s nullglob
-
-# Prevent collision in reading shell scripts.
-git config core.autocrlf false
-
-source ./util.sh
 
 cache_global_vars() {
   # Read .env
@@ -46,112 +45,32 @@ cache_global_vars() {
   expose_port_master=$(get_value_from_env "EXPOSE_PORT_MASTER")
 }
 
-create_master_volumes_if_not_exists() {
 
-  if [ -z "$mysql_data_path_master" ]; then echo "MYSQL_DATA_PATH_MASTER on .env : empty" && exit 1; fi
-  if [ -z "$mysql_log_path_master" ]; then echo "MYSQL_LOG_PATH_MASTER on .env : empty" && exit 1; fi
-  if [ -z "$mysql_file_path_master" ]; then echo "MYSQL_FILE_PATH_MASTER on .env : empty" && exit 1; fi
-  if [ -z "$mysql_etc_path_master" ]; then echo "MYSQL_ETC_PATH_MASTER on .env : empty" && exit 1; fi
+create_host_folders_if_not_exists() {
 
-  if [[ -d ${mysql_data_path_master} ]]; then
-    echo "The directory of 'MYSQL_DATA_PATH_MASTER' already exists."
-  else
-    sudo mkdir -p ${mysql_data_path_master}
-    echo "The directory of 'MYSQL_DATA_PATH_MASTER' has been created."
-  fi
+  arr_variable=("$mysql_data_path_master" "$mysql_log_path_master" "$mysql_file_path_master" "$mysql_etc_path_master" "$mysql_data_path_slave" "$mysql_log_path_slave" "$mysql_file_path_slave" "$mysql_etc_path_slave")
 
-  if [[ -d ${mysql_log_path_master} ]]; then
-    echo "The directory of 'MYSQL_LOG_PATH_MASTER' already exists."
-  else
-    sudo mkdir -p ${mysql_log_path_master}
-    echo "The directory of 'MYSQL_LOG_PATH_MASTER' has been created."
-  fi
+  ## now loop through the above array
+  for val in "${arr_variable[@]}"; do
+    if [[ -d $val ]]; then
+      echo "[NOTICE] The directory of '$val' already exists."
+    else
+      if [ -z $val ]; then
+        echo "[NOTICE] The variable '$val' is empty"
+        exit 0
+      fi
 
-  if [[ -d ${mysql_file_path_master} ]]; then
-    echo "The directory of 'MYSQL_FILE_PATH_MASTER' already exists."
-  else
-    sudo mkdir -p ${mysql_file_path_master}
-    echo "The directory of 'MYSQL_FILE_PATH_MASTER' has been created."
-  fi
+      sudo mkdir -p $val
 
-  if [[ -d ${mysql_etc_path_master} ]]; then
-    echo "The directory of 'MYSQL_ETC_PATH_MASTER' already exists."
-  else
-    sudo mkdir -p ${mysql_etc_path_master}
-    echo "The directory of 'MYSQL_ETC_PATH_MASTER' has been created."
-  fi
-
-
-  # mysql:mysql does not work only 999:999 works
-  # https://stackoverflow.com/a/67775426/7344596
-  sudo chown -R 999:999 ${mysql_data_path_master} ${mysql_log_path_master} ${mysql_file_path_master}
-
-}
-
-create_slave_volumes_if_not_exists() {
-
-  if [ -z "$mysql_data_path_slave" ]; then echo "MYSQL_DATA_PATH_SLAVE on .env : empty" && exit 1; fi
-  if [ -z "$mysql_log_path_slave" ]; then echo "MYSQL_LOG_PATH_SLAVE on .env : empty" && exit 1; fi
-  if [ -z "$mysql_file_path_slave" ]; then echo "MYSQL_FILE_PATH_SLAVE on .env : empty" && exit 1; fi
-  if [ -z "$mysql_etc_path_slave" ]; then echo "MYSQL_ETC_PATH_SLAVE on .env : empty" && exit 1; fi
-
-
-  if [[ -d ${mysql_data_path_slave} ]]; then
-    echo "The directory of 'MYSQL_DATA_PATH_SLAVE' already exists."
-  else
-    sudo mkdir -p ${mysql_data_path_slave}
-    echo "The directory of 'MYSQL_DATA_PATH_SLAVE' has been created."
-  fi
-
-  if [[ -d ${mysql_log_path_slave} ]]; then
-    echo "The directory of 'MYSQL_LOG_PATH_SLAVE' already exists."
-  else
-    sudo mkdir -p ${mysql_log_path_slave}
-    echo "The directory of 'MYSQL_LOG_PATH_SLAVE' has been created."
-  fi
-
-  if [[ -d ${mysql_file_path_slave} ]]; then
-    echo "The directory of 'MYSQL_FILE_PATH_SLAVE' already exists."
-  else
-    sudo mkdir -p ${mysql_file_path_slave}
-    echo "The directory of 'MYSQL_FILE_PATH_SLAVE' has been created."
-  fi
-
-  if [[ -d ${mysql_etc_path_slave} ]]; then
-    echo "The directory of 'MYSQL_ETC_PATH_SLAVE' already exists."
-  else
-    sudo mkdir -p ${mysql_etc_path_slave}
-    echo "The directory of 'MYSQL_ETC_PATH_SLAVE' has been created."
-  fi
-
-
-  # mysql:mysql does not work only 999:999 works
-  # https://stackoverflow.com/a/67775426/7344596
-  sudo chown -R 999:999 ${mysql_data_path_slave} ${mysql_log_path_slave} ${mysql_file_path_master}
-
-
-}
-
-prepare_volumes() {
-
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      create_master_volumes_if_not_exists
-    elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      create_slave_volumes_if_not_exists
+      echo "[NOTICE] The directory of '$val' has been created."
     fi
-  elif [[ ${separated_mode} == false ]]; then
-    create_master_volumes_if_not_exists
-    create_slave_volumes_if_not_exists
-  else
-    echo "SEPARATED_MODE on .env : empty"
-    exit 1
-  fi
+
+    sudo chown -R 999:999 $val
+
+  done
 }
 
 restart_docker() {
-
-  docker-compose down
 
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
       docker image prune -f
@@ -160,10 +79,12 @@ restart_docker() {
   fi
 
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
-    docker-compose build --no-cache || (echo "Check if your docker is available." && exit 1)
+    docker-compose build --no-cache || exit 1
   else
-    docker-compose build || (echo "Check if your docker is available." && exit 1)
+    docker-compose build || exit 1
   fi
+
+  docker-compose down
 
   if [[ ${separated_mode} == true ]]; then
     if [[ ${separated_mode_who_am_i} == "master" ]]; then
@@ -182,14 +103,14 @@ restart_docker() {
 
 wait_until_db_up() {
 
-  echo -e "Checking DB ("${1}") is up."
+  echo -e "[NOTICE] Checking DB ("${1}") is up."
 
   for retry_count in {1..10}; do
     db_up=$(docker exec "${1}" mysql -uroot -p${2} -e "SELECT 1" -s | tail -n 1 | awk {'print $1'}) || db_up=0
     db_up_found=$(echo ${db_up} | egrep '^[^0-9]*1[^0-9]*$' | wc -l)
 
     if [[ ${db_up_found} -ge 1 ]]; then
-      echo -e "DB ("${1}") is up."
+      echo -e "[SUCCESS] DB ("${1}") is up."
       break
     else
       echo "Retrying..."
@@ -331,7 +252,7 @@ slave_health () {
   if ! echo "$status" | grep -qs "Slave_IO_Running: Yes"    ||
      ! echo "$status" | grep -qs "Slave_SQL_Running: Yes"   ||
      ! echo "$status" | grep -qs "Seconds_Behind_Master: 0" ; then
-	echo WARNING: Replication is not healthy.
+	echo ERROR: Replication is not healthy.
     return 1
   fi
   return 0
@@ -342,7 +263,6 @@ check_slave_health(){
   while ! slave_health; do
     if (( counter >= 5 )); then
       echo ERROR: Replication is NOT healthy.
-  	break
       exit 1
     fi
     let counter=counter+1
@@ -374,6 +294,13 @@ unlock_all(){
 
 _main() {
 
+  echo "[SECURITY] Set .env 600 at all times."
+  sudo chmod 600 .env
+
+  echo "[SECURITY] Set my.cnf 999:1000 at all times"
+  sudo chown 999:1000 ./master/my.cnf
+  sudo chown 999:1000 ./slave/my.cnf
+
   # Set global variables BEFORE DOCKER IS UP
   cache_global_vars
 
@@ -381,10 +308,11 @@ _main() {
 
     docker-compose down
 
-    echo -e "Remove all slave data"
     sudo rm -rf ${mysql_data_path_slave}
+
+    echo -e "[IMPORTANT] Removed all slave data as 'slave_emergency_recovery' is on."
   fi
-  prepare_volumes
+  create_host_folders_if_not_exists
 
   restart_docker
 
