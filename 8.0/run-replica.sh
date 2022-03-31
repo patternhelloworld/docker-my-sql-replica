@@ -297,7 +297,7 @@ _main() {
   echo "[SECURITY] Set .env 600 at all times."
   sudo chmod 600 .env
 
-  echo "[SECURITY] Set my.cnf 999:1000 at all times"
+  echo "[SECURITY] Set my.cnf 999:1000 at all times (1000 is for the Host User)"
   sudo chown 999:1000 ./master/my.cnf
   sudo chown 999:1000 ./slave/my.cnf
 
