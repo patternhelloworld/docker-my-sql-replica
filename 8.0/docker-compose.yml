@@ -8,6 +8,8 @@ services:
       dockerfile: master/Dockerfile
     restart: always
     environment:
+      MHA_SHARE_SSHKEYS_PATH: /root/mha_share/sshkeys
+      CONTAINER_NAME: ${MASTER_CONTAINER_NAME}
       MYSQL_USER: ${MYSQL_REMOTE_USER_MASTER}
       MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_MASTER}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -16,6 +18,7 @@ services:
       - '${EXPOSE_PORT_MASTER}:3306'
     # Where our data will be persisted
     volumes:
+      - "./volumes/mha_share/:/root/mha_share/"
       - ${MYSQL_DATA_PATH_MASTER}:/var/lib/mysql
       - ${MYSQL_FILE_PATH_MASTER}:/var/lib/mysql-files
       - ${MYSQL_LOG_PATH_MASTER}:/var/log/mysql
@@ -26,12 +29,16 @@ services:
   
   db-slave:
     container_name: ${SLAVE_CONTAINER_NAME}
+    depends_on:
+      - db-master
     privileged: true
     build:
       context: ./
       dockerfile: slave/Dockerfile
     restart: always
     environment:
+      MHA_SHARE_SSHKEYS_PATH: /root/mha_share/sshkeys
+      CONTAINER_NAME: ${SLAVE_CONTAINER_NAME}
       MYSQL_USER: ${MYSQL_REMOTE_USER_SLAVE}
       MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_SLAVE}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -40,11 +47,41 @@ services:
       - '${EXPOSE_PORT_SLAVE}:3306'
     # Where our data will be persisted
     volumes:
+      - "./volumes/mha_share/:/root/mha_share/"
       - ${MYSQL_DATA_PATH_SLAVE}:/var/lib/mysql
       - ${MYSQL_FILE_PATH_SLAVE}:/var/lib/mysql-files
       - ${MYSQL_LOG_PATH_SLAVE}:/var/log/mysql
       - ${MYSQL_ETC_PATH_SLAVE}:/var/tmp
       - ./slave/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - net-mysql
+
+  mha-manager:
+    container_name: mha-manager
+    depends_on:
+      - db-master
+      - db-slave
+    stdin_open: true
+    tty: true
+    privileged: true
+    build:
+      context: ./
+      dockerfile: mha-manager/Dockerfile
+    restart: always
+    environment:
+      MHA_SHARE_SSHKEYS_PATH: /root/mha_share/sshkeys
+      CONTAINER_NAME: mha-manager
+      MYSQL_USER: ${MYSQL_REMOTE_USER_MASTER}
+      MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_MASTER}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+    ports:
+      - '23506:3306'
+    volumes:
+      - "./volumes/mha_share/:/root/mha_share/"
+      - "./volumes/mha_manager/conf:/etc/mha"
+      - "./volumes/mha_manager/work:/usr/local/mha"
+    # Where our data will be persisted
     networks:
       - net-mysql
   

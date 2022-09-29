@@ -1,6 +1,7 @@
 #!/bin/bash
-sudo bash ./prevent-crlf.sh
 echo "[NOTICE] To prevent CRLF errors on Windows, CRLF->LF ... "
+sudo sed -i -e "s/\r$//g" $(basename $0)
+sudo bash ./prevent-crlf.sh
 sleep 3
 source ./util.sh
 
@@ -43,6 +44,8 @@ cache_global_vars() {
   replication_password=$(get_value_from_env "MYSQL_REPLICATION_USER_PASSWORD_MASTER")
 
   expose_port_master=$(get_value_from_env "EXPOSE_PORT_MASTER")
+
+  mha_sshd_password=$(get_value_from_env "MHA_SSHD_PASSWORD")
 }
 
 
@@ -70,7 +73,7 @@ create_host_folders_if_not_exists() {
   done
 }
 
-restart_docker() {
+re_up_master_slave() {
 
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
       docker image prune -f
@@ -93,7 +96,8 @@ restart_docker() {
         docker-compose up -d db-slave
     fi
   elif [[ ${separated_mode} == false ]]; then
-    docker-compose up -d
+      docker-compose up -d db-master
+      docker-compose up -d db-slave
   else
     echo "SEPARATED_MODE on .env : empty"
     exit 1
@@ -314,7 +318,7 @@ _main() {
   fi
   create_host_folders_if_not_exists
 
-  restart_docker
+  re_up_master_slave
 
   # If the following error comes up, that means the DB is not yet up, so we need to give it a proper time to be up.
   # ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)
@@ -365,10 +369,30 @@ _main() {
   fi
 
   # Set global variables AFTER DB IS UP
+  # Master and Slave IPs are now set
   cache_global_vars_after_d_up
 
   # SLAVE ONLY
   connect_slave_to_master
+
+  docker-compose up -d mha-manager
+  # Set MHA configuration
+  # sed -i -E "s/(post_max_size\s*=\s*)[^\n\r]+/\1100M/" /usr/local/etc/php/php.ini
+   sed -i -E 's/(password[\t\s]*=).+$/\1'${mha_sshd_password}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E 's/(repl_user[\t\s]*=).+$/\1'${replication_user}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E 's/(repl_password[\t\s]*=).+$/\1'${replication_password}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E -z 's/(\[server0\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_master_ip}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_slave_ip}'/' ./volumes/mha_manager/conf/app1.conf
+
+  # SSH 키를 생성하고, 해당 키들을 Volume 폴더에 위치
+  docker exec -it mha-manager /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
+  docker exec -it ${master_container_name} /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
+  docker exec -it ${slave_container_name} /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
+
+  # Volume 에 있는 모든 키들을 각각의 컨테이너 들에서 /root/.ssh/authorized_keys 에 위치 시킴
+  docker exec -it mha_manager /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+  docker exec -it ${master_container_name} /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+  docker exec -it ${slave_container_name} /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
 
   unlock_all
 
