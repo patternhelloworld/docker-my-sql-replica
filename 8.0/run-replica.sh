@@ -378,25 +378,51 @@ _main() {
   docker-compose up -d mha-manager
   # Set MHA configuration
   # sed -i -E "s/(post_max_size\s*=\s*)[^\n\r]+/\1100M/" /usr/local/etc/php/php.ini
-   sed -i -E 's/(password[\t\s]*=).+$/\1'${mha_sshd_password}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E 's/(repl_user[\t\s]*=).+$/\1'${replication_user}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E 's/(repl_password[\t\s]*=).+$/\1'${replication_password}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E -z 's/(\[server0\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_master_ip}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_slave_ip}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E 's/^(password=).*$/\1'${mha_sshd_password}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_master_ip}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_slave_ip}'/' ./volumes/mha_manager/conf/app1.conf
+
 
   # SSH 키를 생성하고, 해당 키들을 Volume 폴더에 위치
+  echo  "MHA - GENERATE SSH KEY"
   docker exec -it mha-manager /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
+  echo  "MASTER - GENERATE SSH KEY"
   docker exec -it ${master_container_name} /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
+  echo  "SLAVE - GENERATE SSH KEY"
   docker exec -it ${slave_container_name} /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
 
   # Volume 에 있는 모든 키들을 각각의 컨테이너 들에서 /root/.ssh/authorized_keys 에 위치 시킴
-  docker exec -it mha_manager /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+  echo  "MHA - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+  docker exec -it mha-manager /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+  echo  "MASTER - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
   docker exec -it ${master_container_name} /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+  echo  "SLAVE - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
   docker exec -it ${slave_container_name} /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+
+  sleep 3
+
+  # MHA SSH ROOT PASSWORD 설정
+  echo "MHA : SSH ROOT PASSWORD 변경"
+  docker exec -it mha-manager sh -c 'echo "root:'${mha_sshd_password}'" | chpasswd'
+
+  ## SSH 시작
+  echo  "MHA - SSH 시작"
+  docker exec -it mha-manager service ssh restart
+  echo  "MASTER - SSH 시작"
+  docker exec -it ${master_container_name} service ssh restart
+  echo  "SLAVE - SSH 시작"
+  docker exec -it ${slave_container_name} service ssh restart
 
   unlock_all
 
   check_slave_health
+
+    ## mha manager 를 실행합니다.
+      echo  "MHA MANAGER 시작"
+    docker exec -it mha-manager masterha_manager --conf=/etc/mha/app1.conf
+
 
 }
 _main
