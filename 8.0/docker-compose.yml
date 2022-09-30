@@ -25,7 +25,8 @@ services:
       - ${MYSQL_ETC_PATH_MASTER}:/var/tmp
       - ./master/my.cnf:/etc/mysql/my.cnf
     networks:
-      - net-mysql
+       net-mysql:
+          ipv4_address: 10.3.0.10
   
   db-slave:
     container_name: ${SLAVE_CONTAINER_NAME}
@@ -54,7 +55,8 @@ services:
       - ${MYSQL_ETC_PATH_SLAVE}:/var/tmp
       - ./slave/my.cnf:/etc/mysql/my.cnf
     networks:
-      - net-mysql
+      net-mysql:
+        ipv4_address: 10.3.0.11
 
   mha-manager:
     container_name: mha-manager
@@ -79,11 +81,12 @@ services:
       - '23506:3306'
     volumes:
       - "./volumes/mha_share/:/root/mha_share/"
-      - "./volumes/mha_manager/conf:/etc/mha"
-      - "./volumes/mha_manager/work:/usr/local/mha"
+      - "./volumes/mha-manager/conf:/etc/mha"
+      - "./volumes/mha-manager/work:/usr/local/mha"
     # Where our data will be persisted
     networks:
-      - net-mysql
+      net-mysql:
+        ipv4_address: 10.3.0.9
   
 # Names our volume
 volumes:
@@ -93,3 +96,7 @@ volumes:
 networks:
   net-mysql:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.3.0.0/16
+          gateway: 10.3.0.1

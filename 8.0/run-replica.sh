@@ -378,11 +378,11 @@ _main() {
   docker-compose up -d mha-manager
   # Set MHA configuration
   # sed -i -E "s/(post_max_size\s*=\s*)[^\n\r]+/\1100M/" /usr/local/etc/php/php.ini
-   sed -i -E 's/^(password=).*$/\1'${mha_sshd_password}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_master_ip}'/' ./volumes/mha_manager/conf/app1.conf
-   sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_slave_ip}'/' ./volumes/mha_manager/conf/app1.conf
+   sed -i -E 's/^(password=).*$/\1'${master_root_password}'/' ./volumes/mha-manager/conf/app1.conf
+   sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./volumes/mha-manager/conf/app1.conf
+   sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./volumes/mha-manager/conf/app1.conf
+   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\110.3.0.10/' ./volumes/mha-manager/conf/app1.conf
+   sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\110.3.0.11/' ./volumes/mha-manager/conf/app1.conf
 
 
   # SSH 키를 생성하고, 해당 키들을 Volume 폴더에 위치
@@ -421,8 +421,11 @@ _main() {
 
     ## mha manager 를 실행합니다.
       echo  "MHA MANAGER 시작"
-    docker exec -it mha-manager masterha_manager --conf=/etc/mha/app1.conf
+ # docker exec -it mha-manager cp -f /usr/local/NodeUtil.pm /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
 
-
+  docker exec -it mha-manager chmod 664 /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
+  docker exec -it mha-manager sed -i -E -z "s/(\use warnings FATAL => 'all';[\n\r\t\s]*)/\1no warnings qw( redundant );/" /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
+  docker exec -ti mha-manager bash -c "nohup masterha_manager --conf=/etc/mha/app1.conf --last_failover_minute=1 &> /etc/mha/masterha_manager.log & sleep 5"
+  docker exec -it mha-manager masterha_check_status --conf=/etc/mha/app1.conf
 }
 _main

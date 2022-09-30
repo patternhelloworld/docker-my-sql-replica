@@ -1,16 +1,14 @@
 [mysqld]
 
 # 1. REPLICATION
-server_id=1
-# default caching_sha2_password
+log_bin=mysql-bin
+server_id=2
+#Prevent relay_log : ERROR 29 (HY000) at line 1: File '/var/run/mysqld/mysql-relay-bin.index' not fond (OS errno 13 - Permission denied)
+#relay_log=/var/run/mysqld/mysql-relay-bin
+#log_slave_update=1
+read-only=1
 default_authentication_plugin=mysql_native_password
 bind-address=0.0.0.0
-log_bin=mysql-bin
-sync_binlog=1
-# Speed : 0 > 2 > 1
-innodb_flush_log_at_trx_commit=1
-binlog_format=row
-
 
 # 2. LOG
 log-error=/var/log/mysql/error.log
@@ -20,11 +18,11 @@ slow_query_log_file =/var/log/mysql/mysql-slow.log
 long_query_time = 3
 
 # 3. BIN
-binlog_cache_size=2M
-max_binlog_size=60M
-binlog_expire_logs_seconds=864000
-binlog_format=row
-log_bin_trust_function_creators=1
+#binlog_cache_size=2M
+#max_binlog_size=60M
+#binlog_expire_logs_seconds=864000
+#binlog_format=row
+#log_bin_trust_function_creators=1
 
 # 4. CAPACITY & SECURITY
 # Default = 1M
@@ -38,7 +36,7 @@ default-storage-engine=INNODB
 # Not recommended RAM more that 256M due to recovery time in case of collision happening
 innodb_log_file_size=256M
 # 70~80% of the available memory for the DB
-innodb_buffer_pool_size=2GB
+innodb_buffer_pool_size=1GB
 innodb_log_buffer_size=4M
 # 0 means "as many as possible"
 innodb_thread_concurrency=0
@@ -61,17 +59,17 @@ skip-character-set-client-handshake
 [client]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 [mysql]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 [mysqldump]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 # SERVER SECTION
 # ----------------------------------------------------------------------
@@ -83,6 +81,3 @@ skip-character-set-client-handshake
 #
 [mysqld_safe]
 log_error=/var/log/mysql/error-safe.log
-
-
-

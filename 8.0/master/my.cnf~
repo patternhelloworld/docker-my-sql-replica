@@ -20,11 +20,11 @@ slow_query_log_file =/var/log/mysql/mysql-slow.log
 long_query_time = 3
 
 # 3. BIN
-binlog_cache_size=2M
-max_binlog_size=60M
-binlog_expire_logs_seconds=864000
-binlog_format=row
-log_bin_trust_function_creators=1
+#binlog_cache_size=2M
+#max_binlog_size=60M
+#binlog_expire_logs_seconds=864000
+#binlog_format=row
+#log_bin_trust_function_creators=1
 
 # 4. CAPACITY & SECURITY
 # Default = 1M
@@ -61,17 +61,17 @@ skip-character-set-client-handshake
 [client]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 [mysql]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 [mysqldump]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 # SERVER SECTION
 # ----------------------------------------------------------------------

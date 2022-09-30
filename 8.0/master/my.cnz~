@@ -61,17 +61,17 @@ skip-character-set-client-handshake
 [client]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 [mysql]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 [mysqldump]
 
 # 1. CHARACTER
-#default-character-set = utf8mb4
+default-character-set = utf8mb4
 
 # SERVER SECTION
 # ----------------------------------------------------------------------
