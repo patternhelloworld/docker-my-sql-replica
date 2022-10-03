@@ -294,7 +294,63 @@ unlock_all(){
   fi
 }
 
+up_mha_manager(){
+    docker-compose up -d mha-manager
+}
 
+set_mha_conf_after_cache_global_vars_after_d_up(){
+      # Set MHA configuration
+      # sed -i -E "s/(post_max_size\s*=\s*)[^\n\r]+/\1100M/" /usr/local/etc/php/php.ini
+     sed -i -E 's/^(password=).*$/\1'${master_root_password}'/' ./mha-manager/conf/app1.conf
+     sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./mha-manager/conf/app1.conf
+     sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./mha-manager/conf/app1.conf
+     sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_master_ip}'/' ./mha-manager/conf/app1.conf
+     sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_slave_ip}'/' ./mha-manager/conf/app1.conf
+}
+
+prepare_mha_ssh_keys(){
+
+    echo  "MHA - GENERATE SSH PUBLIC,PRIVATE KEYS"
+    docker exec -it mha-manager /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
+    echo  "MASTER - GENERATE SSH PUBLIC,PRIVATE KEYS"
+    docker exec -it ${master_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
+    echo  "SLAVE - GENERATE SSH PUBLIC,PRIVATE KEYS"
+    docker exec -it ${slave_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
+
+    echo  "MHA - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+    docker exec -it mha-manager /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
+    echo  "MASTER - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+    docker exec -it ${master_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
+    echo  "SLAVE - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+    docker exec -it ${slave_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
+
+    sleep 3
+
+    ## SSH 키 적용
+    echo  "MHA - RESTART SSH"
+    docker exec -it mha-manager service ssh restart
+    echo  "MASTER - RESTART SSH"
+    docker exec -it ${master_container_name} service ssh restart
+    echo  "SLAVE - RESTART SSH"
+    docker exec -it ${slave_container_name} service ssh restart
+}
+
+set_mha_ssh_root_passwd(){
+    # MHA SSH ROOT PASSWORD 설정
+    echo "MHA : SSH ROOT PASSWORD 적용"
+    docker exec -it mha-manager sh -c 'echo "root:'${mha_sshd_password}'" | chpasswd'
+}
+
+make_changes_to_mha_library(){
+      docker exec -it mha-manager chmod 664 /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
+      docker exec -it mha-manager sed -i -E -z "s/(\use warnings FATAL => 'all';[\n\r\t\s]*)/\1no warnings qw( redundant );/" /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
+}
+
+start_mha(){
+   echo  "START MHA MANAGER"
+   docker exec -ti mha-manager bash -c "nohup masterha_manager --conf=/etc/mha/app1.conf --last_failover_minute=1 &> /usr/local/mha/log/masterha_manager.log & sleep 5"
+   docker exec -it mha-manager masterha_check_status --conf=/etc/mha/app1.conf
+}
 
 _main() {
 
@@ -333,9 +389,6 @@ _main() {
   elif [[ ${separated_mode} == false ]]; then
       wait_until_db_up "${master_container_name}" "${master_root_password}"
       wait_until_db_up "${slave_container_name}" "${slave_root_password}"
-  else
-    echo "SEPARATED_MODE on .env : empty"
-    exit 1
   fi
 
 
@@ -375,57 +428,29 @@ _main() {
   # SLAVE ONLY
   connect_slave_to_master
 
-  docker-compose up -d mha-manager
-  # Set MHA configuration
-  # sed -i -E "s/(post_max_size\s*=\s*)[^\n\r]+/\1100M/" /usr/local/etc/php/php.ini
-   sed -i -E 's/^(password=).*$/\1'${master_root_password}'/' ./volumes/mha-manager/conf/app1.conf
-   sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./volumes/mha-manager/conf/app1.conf
-   sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./volumes/mha-manager/conf/app1.conf
-   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\110.3.0.10/' ./volumes/mha-manager/conf/app1.conf
-   sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\110.3.0.11/' ./volumes/mha-manager/conf/app1.conf
+  if [[ ${separated_mode} == false || ${separated_mode_who_am_i} == "mha" ]]; then
 
+      up_mha_manager
 
-  # SSH 키를 생성하고, 해당 키들을 Volume 폴더에 위치
-  echo  "MHA - GENERATE SSH KEY"
-  docker exec -it mha-manager /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
-  echo  "MASTER - GENERATE SSH KEY"
-  docker exec -it ${master_container_name} /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
-  echo  "SLAVE - GENERATE SSH KEY"
-  docker exec -it ${slave_container_name} /bin/bash /root/mha_share/scripts/ssh_generate_key.sh
+      set_mha_conf_after_cache_global_vars_after_d_up
 
-  # Volume 에 있는 모든 키들을 각각의 컨테이너 들에서 /root/.ssh/authorized_keys 에 위치 시킴
-  echo  "MHA - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
-  docker exec -it mha-manager /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
-  echo  "MASTER - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
-  docker exec -it ${master_container_name} /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
-  echo  "SLAVE - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
-  docker exec -it ${slave_container_name} /bin/bash /root/mha_share/scripts/ssh_auth_keys.sh
+      set_mha_ssh_root_passwd
 
-  sleep 3
+      prepare_mha_ssh_keys
 
-  # MHA SSH ROOT PASSWORD 설정
-  echo "MHA : SSH ROOT PASSWORD 변경"
-  docker exec -it mha-manager sh -c 'echo "root:'${mha_sshd_password}'" | chpasswd'
+      make_changes_to_mha_library
 
-  ## SSH 시작
-  echo  "MHA - SSH 시작"
-  docker exec -it mha-manager service ssh restart
-  echo  "MASTER - SSH 시작"
-  docker exec -it ${master_container_name} service ssh restart
-  echo  "SLAVE - SSH 시작"
-  docker exec -it ${slave_container_name} service ssh restart
-
-  unlock_all
+  fi
 
   check_slave_health
 
-    ## mha manager 를 실행합니다.
-      echo  "MHA MANAGER 시작"
- # docker exec -it mha-manager cp -f /usr/local/NodeUtil.pm /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
+  unlock_all
 
-  docker exec -it mha-manager chmod 664 /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
-  docker exec -it mha-manager sed -i -E -z "s/(\use warnings FATAL => 'all';[\n\r\t\s]*)/\1no warnings qw( redundant );/" /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
-  docker exec -ti mha-manager bash -c "nohup masterha_manager --conf=/etc/mha/app1.conf --last_failover_minute=1 &> /etc/mha/masterha_manager.log & sleep 5"
-  docker exec -it mha-manager masterha_check_status --conf=/etc/mha/app1.conf
+  if [[ ${separated_mode} == false || ${separated_mode_who_am_i} == "mha" ]]; then
+
+    make_changes_to_mha_library
+    start_mha
+
+  fi
 }
 _main
