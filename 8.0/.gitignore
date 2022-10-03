@@ -6,4 +6,7 @@
 /slave/etc/*
 /slave/log/*
 /slave/file/*
+/mha-manager/log/*
+/mha-manager/mha-ssh/sshkeys/
+!/mha-manager/mha-ssh/sshkeys/.gitkeep
 .env
