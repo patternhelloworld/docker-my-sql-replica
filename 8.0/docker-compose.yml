@@ -26,7 +26,7 @@ services:
       - ./master/my.cnf:/etc/mysql/my.cnf
     networks:
        net-mysql:
-          ipv4_address: 10.3.0.10
+          ipv4_address: ${DOCKER_MASTER_IP}
   
   db-slave:
     container_name: ${SLAVE_CONTAINER_NAME}
@@ -56,10 +56,12 @@ services:
       - ./slave/my.cnf:/etc/mysql/my.cnf
     networks:
       net-mysql:
-        ipv4_address: 10.3.0.11
+        ipv4_address: ${DOCKER_SLAVE_IP}
 
   mha-manager:
     container_name: mha-manager
+    env_file:
+      - ./.dynamic_env
     depends_on:
       - db-master
       - db-slave
@@ -87,7 +89,7 @@ services:
     # Where our data will be persisted
     networks:
       net-mysql:
-        ipv4_address: 10.3.0.9
+        ipv4_address: ${DOCKER_MHA_IP}
   
 # Names our volume
 volumes:
