@@ -47,7 +47,20 @@ GetOptions(
 exit &main();
 
 sub main {
-      print "AAAA Set read_only=0 on the new master.\n";
+
+   print "VIP UP...\n";
+
+  # if ( $new_master_ip eq $ENV{db_master_ip_from_the_others} ) {
+   #   system("/bin/sh /usr/local/mha/work/custom-scripts/master_vip_up.sh");
+   # }
+   # elsif ( $new_master_ip eq $ENV{db_slave_ip_from_the_others} ) {
+    #  system("/bin/sh /usr/local/mha/work/custom-scripts/slave_vip_up.sh");
+    #}
+   # else {}
+
+
+  print "master_ip_failover script is now starting...\n";
+
   if ( $command eq "stop" || $command eq "stopssh" ) {
 
     # $orig_master_host, $orig_master_ip, $orig_master_port are passed.
@@ -83,8 +96,8 @@ sub main {
       $new_master_handler->disable_log_bin_local();
       print "Set read_only=0 on the new master.\n";
       $new_master_handler->disable_read_only();
-
-
+      print $new_master_ip;
+      print $ENV{db_master_ip_from_the_others};
         if ( $new_master_ip eq $ENV{db_master_ip_from_the_others} ) {
           system("/bin/sh /usr/local/mha/work/custom-scripts/master_vip_up.sh");
         }

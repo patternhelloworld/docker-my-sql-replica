@@ -1,7 +1,8 @@
 FROM mysql:8.0.30-debian
 
 RUN apt-get update -qqy && apt-get -qqy install \
-iputils-ping curl runit wget unzip vim openssh-server ssh sshpass perl libdbi-perl libmodule-install-perl libdbd-mysql-perl make net-tools iproute2
+iputils-ping curl runit wget unzip vim openssh-server ssh sshpass perl libdbi-perl libmodule-install-perl libdbd-mysql-perl make net-tools iproute2 && \
+apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp
 RUN wget https://github.com/yoshinorim/mha4mysql-node/releases/download/v0.58/mha4mysql-node-0.58.tar.gz && tar -zxf /tmp/mha4mysql-node-0.58.tar.gz -C /opt
