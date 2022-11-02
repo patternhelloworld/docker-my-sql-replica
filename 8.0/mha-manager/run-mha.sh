@@ -13,8 +13,8 @@ source ./util.sh
 #shopt -s nullglob
 
 initialize_files(){
-  sudo rm -f ./master/etc/all-databases.sql
-  sudo rm -f ./slave/etc/all-databases.sql
+  # sudo rm -f ./master/etc/all-databases.sql
+  # sudo rm -f ./slave/etc/all-databases.sql
   sudo rm -f ./mha-manager/work/app1.failover.complete
 }
 
@@ -161,14 +161,14 @@ cache_set_vip() {
 
 create_replication_user() {
   if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${db_slave_ip_from_the_others}' IDENTIFIED BY '${replication_password}';"
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${db_slave_ip_from_the_others}' WITH GRANT OPTION;"
+    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${machine_slave_ip}' IDENTIFIED BY '${replication_password}';"
+    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${machine_slave_ip}' WITH GRANT OPTION;"
     docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
   fi
 
   if [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${db_master_ip_from_the_others}' IDENTIFIED BY '${replication_password}';"
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${db_master_ip_from_the_others}' WITH GRANT OPTION;"
+    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${machine_master_ip}' IDENTIFIED BY '${replication_password}';"
+    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${machine_master_ip}' WITH GRANT OPTION;"
     docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
   fi
 }
@@ -198,12 +198,12 @@ connect_slave_to_master() {
     docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "STOP SLAVE;"
     docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "RESET SLAVE ALL;"
 
-    echo -e "Point Slave to Master (IP : ${db_master_ip_from_the_others}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
+    echo -e "Point Slave to Master (IP : ${machine_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
 
     if [[ ${separated_mode} == true ]]; then
-      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${db_master_ip_from_the_others}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1, MASTER_PORT=${separated_mode_master_port};"
+      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1, MASTER_PORT=${separated_mode_master_port};"
     else
-      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${db_master_ip_from_the_others}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
+      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
     fi
 
     echo -e "Starting Slave..."
@@ -259,7 +259,7 @@ unlock_all() {
 }
 
 set_dynamic_env(){
-  printf 'db_master_ip_from_the_others='${db_master_ip_from_the_others}'\ndb_slave_ip_from_the_others='${db_slave_ip_from_the_others}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} > ./.dynamic_env
+  printf 'machine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} > ./.dynamic_env
 }
 
 up_mha_manager() {
@@ -273,8 +273,8 @@ set_mha_conf_after_cache_global_vars_after_d_up() {
   sed -i -E 's/^(password=).*$/\1'${master_root_password}'/' ./mha-manager/conf/app1.conf
   sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./mha-manager/conf/app1.conf
   sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./mha-manager/conf/app1.conf
-  sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_master_ip_from_the_others}'/' ./mha-manager/conf/app1.conf
-  sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${db_slave_ip_from_the_others}'/' ./mha-manager/conf/app1.conf
+  sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_master_ip}'/' ./mha-manager/conf/app1.conf
+  sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_slave_ip}'/' ./mha-manager/conf/app1.conf
 }
 
 
@@ -298,21 +298,21 @@ start_mha() {
 set_additional_envs() {
     if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
 
-      docker exec ${master_container_name} export db_master_ip_from_the_others=${db_master_ip_from_the_others}
-      docker exec ${master_container_name} export db_slave_ip_from_the_others=${db_slave_ip_from_the_others}
+      docker exec ${master_container_name} export machine_master_ip=${machine_master_ip}
+      docker exec ${master_container_name} export machine_slave_ip=${machine_slave_ip}
       docker exec ${master_container_name} export master_network_interface_name=${master_network_interface_name}
       docker exec ${master_container_name} export mha_vip=${mha_vip}
 
     elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
-      docker exec ${slave_container_name} export db_master_ip_from_the_others=${db_master_ip_from_the_others}
-      docker exec ${slave_container_name} export db_slave_ip_from_the_others=${db_slave_ip_from_the_others}
+      docker exec ${slave_container_name} export machine_master_ip=${machine_master_ip}
+      docker exec ${slave_container_name} export machine_slave_ip=${machine_slave_ip}
       docker exec ${slave_container_name} export master_network_interface_name=${master_network_interface_name}
       docker exec ${slave_container_name} export slave_network_interface_name=${slave_network_interface_name}
       docker exec ${slave_container_name} export mha_vip=${mha_vip}
 
     elif [[ ${separated_mode_who_am_i} == "mha" || ${separated_mode} == false ]]; then
-      docker exec ${mha_container_name} export db_master_ip_from_the_others=${db_master_ip_from_the_others}
-      docker exec ${mha_container_name} export db_slave_ip_from_the_others=${db_slave_ip_from_the_others}
+      docker exec ${mha_container_name} export machine_master_ip=${machine_master_ip}
+      docker exec ${mha_container_name} export machine_slave_ip=${machine_slave_ip}
       docker exec ${mha_container_name} export master_network_interface_name=${master_network_interface_name}
       docker exec ${mha_container_name} export slave_network_interface_name=${slave_network_interface_name}
       docker exec ${mha_container_name} export mha_vip=${mha_vip}
@@ -324,16 +324,20 @@ _main() {
   echo "[SECURITY] Set .env 600 at all times."
   sudo chmod 600 .env
 
+  # Set global variables BEFORE DOCKER IS UP
+  cache_global_vars
+
+  initialize_files
+
+
+
   echo "[SECURITY] Set my.cnf 999:1000 at all times (999 is 'mysql' user and 1000 is for the host user)"
   sudo chown -R 999:1000 ./master/log
   sudo chown -R 999:1000 ./slave/log
   sudo chown 999:1000 ./master/my.cnf
   sudo chown 999:1000 ./slave/my.cnf
 
-  # Set global variables BEFORE DOCKER IS UP
-  cache_global_vars
 
-  initialize_files
 
   create_host_folders_if_not_exists
 
@@ -432,7 +436,7 @@ _main() {
   if [[ ${separated_mode_who_am_i} == "slave" && ${slave_emergency_recovery} == true && ${separated_mode} == true ]]; then
 
     echo "Create Master Back Up SQL"
-    docker exec ${slave_container_name} sh -c 'exec mysqldump -h'${db_master_ip_from_the_others}' -uroot -p'${master_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
+    docker exec ${slave_container_name} sh -c 'exec mysqldump -h'${machine_master_ip}' -uroot -p'${master_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
 
     echo "Copy Master Data to Slave"
     docker exec ${slave_container_name} sh -c 'exec mysql -uroot -p'${slave_root_password}' < /var/tmp/all-databases.sql'
@@ -442,7 +446,7 @@ _main() {
   if [[ ${separated_mode_who_am_i} == "master" && ${master_emergency_recovery} == true && ${separated_mode} == true ]]; then
 
     echo "Create Slave Back Up SQL"
-    docker exec ${master_container_name} sh -c 'exec mysqldump -h'${db_slave_ip_from_the_others}' -uroot -p'${slave_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
+    docker exec ${master_container_name} sh -c 'exec mysqldump -h'${machine_slave_ip}' -uroot -p'${slave_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
 
     echo "Copy Slave Data to Master"
     docker exec ${master_container_name} sh -c 'exec mysql -uroot -p'${slave_root_password}' < /var/tmp/all-databases.sql'
@@ -483,4 +487,44 @@ _main() {
 
   # https://jhdatabase.tistory.com/19
 }
-_main
+
+
+check_ssh_validity(){
+    echo "[NOTICE] Test SSH connections from MHA to ${1}"
+    status=$(docker exec ${mha_container_name} sh -c 'exec ssh -o BatchMode=yes -o ConnectTimeout=5 root@'${1}' echo ok 2>&1')
+
+    if [[ $status == ok ]] ; then
+      echo "${1} Valid"
+    elif [[ $status == "Warning: Permanently added"* ]] ; then
+      echo "${1} Valid ($status)"
+      exit 1
+    elif [[ $status == "Permission denied"* ]] ; then
+      echo "[ERROR] ${1} invalid. Stopping... ($status)"
+      exit 1
+    else
+      echo "[ERROR] ${1} invalid. Stopping... ($status)"
+    fi
+}
+
+_main2(){
+
+    echo "[SECURITY] Set .env 600 at all times."
+    sudo chmod 600 .env
+
+    # Set global variables BEFORE DOCKER IS UP
+    cache_global_vars
+
+    # SSH Validity
+    bash ./commands/check-ssh-validity.sh
+
+    # (Re)start Master
+    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'
+
+    # (Re)start Slave
+    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' "bash '${machine_slave_project_root_path}'/run.sh"'
+
+
+
+}
+
+_main2

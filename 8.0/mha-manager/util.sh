@@ -6,10 +6,22 @@ cache_global_vars() {
   slave_emergency_recovery=$(get_value_from_env "SLAVE_EMERGENCY_RECOVERY")
   docker_layer_corruption_recovery=$(get_value_from_env "DOCKER_LAYER_CORRUPTION_RECOVERY")
 
+  docker_mha_ip=$(get_value_from_env "DOCKER_MHA_IP")
+
   machine_mha_ip=$(get_value_from_env "MACHINE_MHA_IP")
+  machine_mha_ssh_port=$(get_value_from_env "MACHINE_MHA_SSH_PORT")
+
   machine_master_ip=$(get_value_from_env "MACHINE_MASTER_IP")
+  machine_master_ssh_port=$(get_value_from_env "MACHINE_MASTER_SSH_PORT")
+  machine_master_db_port=$(get_value_from_env "MACHINE_MASTER_DB_PORT")
+  machine_master_project_root_path=$(get_value_from_env "MACHINE_MASTER_PROJECT_ROOT_PATH")
+
   machine_slave_ip=$(get_value_from_env "MACHINE_SLAVE_IP")
-  machine_mha_vip=$(get_value_from_env "MACHINE_MHA_VIP")
+  machine_slave_ssh_port=$(get_value_from_env "MACHINE_SLAVE_SSH_PORT")
+  machine_slave_db_port=$(get_value_from_env "MACHINE_SLAVE_DB_PORT")
+  machine_slave_project_root_path=$(get_value_from_env "MACHINE_SLAVE_PROJECT_ROOT_PATH")
+
+  docker_mha_vip=$(get_value_from_env "DOCKER_MHA_VIP")
 
   separated_mode=$(get_value_from_env "SEPARATED_MODE")
   separated_mode_who_am_i=$(get_value_from_env "SEPARATED_MODE_WHO_AM_I")
@@ -18,7 +30,7 @@ cache_global_vars() {
   separated_mode_master_port=$(get_value_from_env "SEPARATED_MODE_MASTER_PORT")
   separated_mode_slave_port=$(get_value_from_env "SEPARATED_MODE_SLAVE_PORT")
   separated_mode_mha_ip=$(get_value_from_env "SEPARATED_MODE_MHA_IP")
-  machine_mha_vip=$(get_value_from_env "MACHINE_MHA_VIP")
+  separated_mode_mha_vip=$(get_value_from_env "SEPARATED_MODE_MHA_VIP")
 
   master_container_name=$(get_value_from_env "MASTER_CONTAINER_NAME")
   slave_container_name=$(get_value_from_env "SLAVE_CONTAINER_NAME")
@@ -40,32 +52,10 @@ cache_global_vars() {
   replication_user=$(get_value_from_env "MYSQL_REPLICATION_USER_MASTER")
   replication_password=$(get_value_from_env "MYSQL_REPLICATION_USER_PASSWORD_MASTER")
 
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      machine_master_ip=${machine_master_ip}
-    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode_who_am_i} == "mha" ]]; then
-      machine_master_ip=${separated_mode_master_ip}
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    machine_master_ip=${machine_master_ip}
-  else
-    echo "[ERROR] SEPARATED_MODE on .env : empty"
-    exit 1
-  fi
+  expose_port_master=$(get_value_from_env "EXPOSE_PORT_MASTER")
 
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode_who_am_i} == "mha" ]]; then
-      machine_slave_ip=${separated_mode_slave_ip}
-    elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      # echo $(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${slave_container_name})
-      machine_slave_ip=${machine_slave_ip}
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    machine_slave_ip=${machine_slave_ip}
-  else
-    echo "[ERROR] SEPARATED_MODE on .env : empty"
-    exit 1
-  fi
+  mha_sshd_password=$(get_value_from_env "MHA_SSHD_PASSWORD")
+
 }
 
 get_value_from_env(){
