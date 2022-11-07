@@ -1,74 +1,15 @@
 version: "3"
 services:
-  db-master:
-    container_name: ${MASTER_CONTAINER_NAME}
-    privileged: true
-    build:
-      context: ./
-      dockerfile: master/Dockerfile
-    environment:
-      MHA_SHARE_SSHKEYS_PATH: /root/mha-ssh/sshkeys
-      CONTAINER_NAME: ${MASTER_CONTAINER_NAME}
-      MYSQL_USER: ${MYSQL_REMOTE_USER_MASTER}
-      MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_MASTER}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      TZ: Asia/Seoul
-    ports:
-      - '${EXPOSE_PORT_MASTER}:3306'
-    # Where our data will be persisted
-    volumes:
-      - "./mha-manager/mha-ssh/:/root/mha-ssh/"
-      - ${MYSQL_DATA_PATH_MASTER}:/var/lib/mysql
-      - ${MYSQL_FILE_PATH_MASTER}:/var/lib/mysql-files
-      - ${MYSQL_LOG_PATH_MASTER}:/var/log/mysql
-      - ${MYSQL_ETC_PATH_MASTER}:/var/tmp
-      - ./master/my.cnf:/etc/mysql/my.cnf
-    networks:
-       net-mysql:
-          ipv4_address: ${MACHINE_MASTER_IP}
-  
-  db-slave:
-    container_name: ${SLAVE_CONTAINER_NAME}
-    depends_on:
-      - db-master
-    privileged: true
-    build:
-      context: ./
-      dockerfile: slave/Dockerfile
-    environment:
-      MHA_SHARE_SSHKEYS_PATH: /root/mha-ssh/sshkeys
-      CONTAINER_NAME: ${SLAVE_CONTAINER_NAME}
-      MYSQL_USER: ${MYSQL_REMOTE_USER_SLAVE}
-      MYSQL_PASSWORD: ${MYSQL_REMOTE_USER_PASSWORD_SLAVE}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      TZ: Asia/Seoul
-    ports:
-      - '${EXPOSE_PORT_SLAVE}:3306'
-    # Where our data will be persisted
-    volumes:
-      - "./mha-manager/mha-ssh/:/root/mha-ssh/"
-      - ${MYSQL_DATA_PATH_SLAVE}:/var/lib/mysql
-      - ${MYSQL_FILE_PATH_SLAVE}:/var/lib/mysql-files
-      - ${MYSQL_LOG_PATH_SLAVE}:/var/log/mysql
-      - ${MYSQL_ETC_PATH_SLAVE}:/var/tmp
-      - ./slave/my.cnf:/etc/mysql/my.cnf
-    networks:
-      net-mysql:
-        ipv4_address: ${MACHINE_SLAVE_IP}
-
   mha-manager:
     container_name: mha-manager
     env_file:
       - ./.dynamic_env
-    depends_on:
-      - db-master
-      - db-slave
     stdin_open: true
     tty: true
     privileged: true
     build:
       context: ./
-      dockerfile: mha-manager/Dockerfile
+      dockerfile: Dockerfile
     restart: always
     environment:
       MHA_SHARE_SSHKEYS_PATH: /root/mha-ssh/sshkeys
@@ -80,24 +21,17 @@ services:
     ports:
       - '23506:3306'
     volumes:
-      - "./mha-manager/mha-ssh/:/root/mha-ssh/"
+      - "../shares/.ssh/mha-manager:/root/.ssh"
+      - "./mha-manager/mha-ssh:/root/mha-ssh/"
       - "./mha-manager/conf:/etc/mha"
       - "./mha-manager/work:/usr/local/mha/work"
       - "./mha-manager/log:/usr/local/mha/log"
     # Where our data will be persisted
     networks:
-      net-mysql:
+      master_net-mysql:
         ipv4_address: ${DOCKER_MHA_IP}
-  
-# Names our volume
-volumes:
-  my-db-master:
-  my-db-slave: 
 
 networks:
-  net-mysql:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.3.0.0/16
-          gateway: 10.3.0.1
+  master_net-mysql:
+    external:
+      name: master_net-mysql

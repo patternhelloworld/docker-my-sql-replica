@@ -40,32 +40,6 @@ cache_global_vars() {
   replication_user=$(get_value_from_env "MYSQL_REPLICATION_USER_MASTER")
   replication_password=$(get_value_from_env "MYSQL_REPLICATION_USER_PASSWORD_MASTER")
 
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      machine_master_ip=${machine_master_ip}
-    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode_who_am_i} == "mha" ]]; then
-      machine_master_ip=${separated_mode_master_ip}
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    machine_master_ip=${machine_master_ip}
-  else
-    echo "[ERROR] SEPARATED_MODE on .env : empty"
-    exit 1
-  fi
-
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode_who_am_i} == "mha" ]]; then
-      machine_slave_ip=${separated_mode_slave_ip}
-    elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      # echo $(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${slave_container_name})
-      machine_slave_ip=${machine_slave_ip}
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    machine_slave_ip=${machine_slave_ip}
-  else
-    echo "[ERROR] SEPARATED_MODE on .env : empty"
-    exit 1
-  fi
 }
 
 get_value_from_env(){

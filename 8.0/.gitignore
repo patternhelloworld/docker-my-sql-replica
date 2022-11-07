@@ -11,3 +11,11 @@
 !/mha-manager/mha-ssh/sshkeys/.gitkeep
 .env
 .dynamic_env
+/shares/.ssh/authorized-keys
+!/shares/.ssh/authorized-keys/.gitkeep
+/shares/.ssh/master
+!/shares/.ssh/master/.gitkeep
+/shares/.ssh/slave
+!/shares/.ssh/slave/.gitkeep
+/shares/.ssh/mha-manager
+!/shares/.ssh/mha-manager/.gitkeep

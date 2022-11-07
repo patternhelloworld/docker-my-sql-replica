@@ -1,7 +1,6 @@
 #!/bin/bash
 echo "[NOTICE] To prevent CRLF errors on Windows, CRLF->LF ... "
 sudo sed -i -e "s/\r$//g" $(basename $0)
-sudo bash ./prevent-crlf.sh
 sleep 3
 source ./util.sh
 
@@ -130,34 +129,6 @@ cache_global_vars_after_d_up() {
 
 }
 
-cache_set_vip() {
-
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      master_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
-      mha_vip=${separated_mode_mha_vip}
-
-      echo "Set Master VIP"
-      ifconfig ${master_network_interface_name}:1 ${mha_vip}
-    elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      slave_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}'|| exit 1)
-      mha_vip=${separated_mode_mha_vip}
-    elif [[ ${separated_mode_who_am_i} == "mha" ]]; then
-      mha_vip=${separated_mode_mha_vip}
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    master_network_interface_name=$(docker exec ${master_container_name} ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
-    slave_network_interface_name=$(docker exec ${slave_container_name} ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
-    mha_vip=${docker_mha_vip}
-
-    echo "Set Master VIP"
-    docker exec ${master_container_name} ifconfig ${master_network_interface_name}:1 ${mha_vip}
-  else
-    echo "[ERROR] SEPARATED_MODE on .env : empty (cache_set_vip)"
-    exit 1
-  fi
-
-}
 
 create_replication_user() {
   if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
@@ -329,22 +300,8 @@ _main() {
 
   initialize_files
 
-
-
-  echo "[SECURITY] Set my.cnf 999:1000 at all times (999 is 'mysql' user and 1000 is for the host user)"
-  sudo chown -R 999:1000 ./master/log
-  sudo chown -R 999:1000 ./slave/log
-  sudo chown 999:1000 ./master/my.cnf
-  sudo chown 999:1000 ./slave/my.cnf
-
-
-
-  create_host_folders_if_not_exists
-
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
     docker image prune -f
-    docker rmi 80_db-master
-    docker rmi 80_db-slave
     docker rmi 80_mha-manager
   fi
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
@@ -353,45 +310,7 @@ _main() {
     docker-compose build || exit 1
   fi
 
-
-  if [[ ${slave_emergency_recovery} == true ]]; then
-    docker-compose down
-    sudo rm -rf ${mysql_data_path_slave}
-    echo -e "[IMPORTANT] Removed all slave data as 'slave_emergency_recovery' is on."
-  fi
-
-  if [[ ${master_emergency_recovery} == true ]]; then
-    docker-compose down
-    sudo rm -rf ${mysql_data_path_master}
-    echo -e "[IMPORTANT] Removed all master data as 'master_emergency_recovery' is on."
-  fi
-
-
-  re_up_master_slave
-
-  cache_set_vip
-
-  if [[ ${separated_mode} == false || ${separated_mode_who_am_i} == "mha" ]]; then
-      up_mha_manager
-  fi
-
-  # If the following error comes up, that means the DB is not yet up, so we need to give it a proper time to be up.
-  # ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)
-  echo -e "Waiting for DB to be up..."
-
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      wait_until_db_up "${master_container_name}" "${master_root_password}"
-    elif [[ ${separated_mode_who_am_i} == "slave" ]]; then
-      wait_until_db_up "${slave_container_name}" "${slave_root_password}"
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    wait_until_db_up "${master_container_name}" "${master_root_password}"
-    wait_until_db_up "${slave_container_name}" "${slave_root_password}"
-  fi
-
-  # Now DB is up from this point on....
-  prepare_ssh_keys_none_separated_mode
+  up_mha_manager
 
   # MASTER ONLY
   create_replication_user
@@ -508,8 +427,27 @@ check_ssh_validity(){
 
 _main2(){
 
-    echo "[SECURITY] Set .env 600 at all times."
-    sudo chmod 600 .env
+  echo "[SECURITY] Set .env 600 at all times."
+  sudo chmod 600 .env
+
+  sudo chown -R root:1000 ../shares/.ssh
+
+  # Set global variables BEFORE DOCKER IS UP
+  cache_global_vars
+
+  initialize_files
+
+  if [[ ${docker_layer_corruption_recovery} == true ]]; then
+    docker image prune -f
+    docker rmi 80_mha-manager
+  fi
+  if [[ ${docker_layer_corruption_recovery} == true ]]; then
+    docker-compose build --no-cache || exit 1
+  else
+    docker-compose build || exit 1
+  fi
+
+  up_mha_manager
 
     # Set global variables BEFORE DOCKER IS UP
     cache_global_vars
@@ -518,10 +456,10 @@ _main2(){
     bash ./commands/check-ssh-validity.sh
 
     # (Re)start Master
-    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'
+    #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'
 
     # (Re)start Slave
-    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' "bash '${machine_slave_project_root_path}'/run.sh"'
+    #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' "bash '${machine_slave_project_root_path}'/run.sh"'
 
 
 

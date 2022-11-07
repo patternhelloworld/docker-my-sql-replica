@@ -1,5 +1,0 @@
-db_master_ip_from_the_others=10.3.0.10
-db_slave_ip_from_the_others=10.3.0.11
-master_network_interface_name=eth0
-slave_network_interface_name=eth0
-mha_vip=10.3.0.12

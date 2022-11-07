@@ -1,7 +1,6 @@
 #!/bin/bash
 echo "[NOTICE] To prevent CRLF errors on Windows, CRLF->LF ... "
 sudo sed -i -e "s/\r$//g" $(basename $0)
-sudo bash ./prevent-crlf.sh
 sleep 3
 source ./util.sh
 
@@ -89,6 +88,8 @@ _main() {
   sudo chown -R 999:1000 ./master/log
   sudo chown 999:1000 ./master/my.cnf
 
+  sudo chown -R root:1000 ../shares/.ssh
+
   # Set global variables BEFORE DOCKER IS UP
   cache_global_vars
 
@@ -117,13 +118,12 @@ _main() {
 
   wait_until_db_up "${master_container_name}" "${master_root_password}"
 
-  # Now DB is up from this point on....
-  prepare_ssh_keys_none_separated_mode
-
   # Create Master-Slave Replication User
   create_replication_user
 
   show_current_db_status
+
+  docker exec ${master_container_name} sh -c 'service ssh restart'
 
 }
 _main

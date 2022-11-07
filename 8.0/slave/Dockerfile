@@ -14,3 +14,4 @@ RUN mkdir -p /usr/local/mha/log && mkdir -p /usr/local/mha/work
 RUN sed -i -E "s/^[#\t\s]*(PermitRootLogin).+$/\1 yes/" /etc/ssh/sshd_config
 RUN sed -i -E "s/^[#\t\s]*(PubkeyAuthentication).+$/\1 yes/" /etc/ssh/sshd_config
 RUN sed -i -E "s/^[#\t\s]*(StrictHostKeyChecking).+$/\1 no/" /etc/ssh/ssh_config
+RUN sed -i -E "s/^[#\t\s]*(PasswordAuthentication).+$/\1 no/" /etc/ssh/ssh_config
