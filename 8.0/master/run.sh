@@ -98,8 +98,10 @@ _main() {
   create_host_folders_if_not_exists
 
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
+    # To remove the image, down the container.
+    docker-compose down
     docker image prune -f
-    docker rmi 80_db-master
+    docker rmi master_db-master
   fi
   if [[ ${docker_layer_corruption_recovery} == true ]]; then
     docker-compose build --no-cache || exit 1
@@ -123,6 +125,7 @@ _main() {
 
   show_current_db_status
 
+  docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
   docker exec ${master_container_name} sh -c 'service ssh restart'
 
 }

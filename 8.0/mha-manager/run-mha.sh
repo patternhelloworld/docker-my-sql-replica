@@ -11,7 +11,7 @@ source ./util.sh
 # Prevent 'bash' from matching null as string
 #shopt -s nullglob
 
-initialize_files(){
+initialize_files() {
   # sudo rm -f ./master/etc/all-databases.sql
   # sudo rm -f ./slave/etc/all-databases.sql
   sudo rm -f ./mha-manager/work/app1.failover.complete
@@ -65,29 +65,29 @@ prepare_ssh_keys_none_separated_mode() {
 
   if [[ ${separated_mode} == false ]]; then
 
-      echo "MHA - GENERATE SSH PUBLIC,PRIVATE KEYS"
-      docker exec -it ${mha_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
-      echo "MASTER - GENERATE SSH PUBLIC,PRIVATE KEYS"
-      docker exec -it ${master_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
-      echo "SLAVE - GENERATE SSH PUBLIC,PRIVATE KEYS"
-      docker exec -it ${slave_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
+    echo "MHA - GENERATE SSH PUBLIC,PRIVATE KEYS"
+    docker exec -it ${mha_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
+    echo "MASTER - GENERATE SSH PUBLIC,PRIVATE KEYS"
+    docker exec -it ${master_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
+    echo "SLAVE - GENERATE SSH PUBLIC,PRIVATE KEYS"
+    docker exec -it ${slave_container_name} /bin/bash /root/mha-ssh/scripts/ssh_generate_key.sh
 
-      echo "MHA - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
-      docker exec -it ${mha_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
-      echo "MASTER - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
-      docker exec -it ${master_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
-      echo "SLAVE - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
-      docker exec -it ${slave_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
+    echo "MHA - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+    docker exec -it ${mha_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
+    echo "MASTER - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+    docker exec -it ${master_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
+    echo "SLAVE - PLACE PUBLIC KEYS FOR ALL CONTAINERS"
+    docker exec -it ${slave_container_name} /bin/bash /root/mha-ssh/scripts/ssh_auth_keys.sh
 
-      sleep 3
+    sleep 3
 
-      ## SSH 키 적용
-      echo "MHA - RESTART SSH"
-      docker exec -it ${mha_container_name} service ssh restart
-      echo "MASTER - RESTART SSH"
-      docker exec -it ${master_container_name} service ssh restart
-      echo "SLAVE - RESTART SSH"
-      docker exec -it ${slave_container_name} service ssh restart
+    ## SSH 키 적용
+    echo "MHA - RESTART SSH"
+    docker exec -it ${mha_container_name} service ssh restart
+    echo "MASTER - RESTART SSH"
+    docker exec -it ${master_container_name} service ssh restart
+    echo "SLAVE - RESTART SSH"
+    docker exec -it ${slave_container_name} service ssh restart
 
   fi
 }
@@ -128,7 +128,6 @@ cache_global_vars_after_d_up() {
   db_master_bin_log_pos=$(get_db_master_bin_log_pos)
 
 }
-
 
 create_replication_user() {
   if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
@@ -229,8 +228,8 @@ unlock_all() {
   fi
 }
 
-set_dynamic_env(){
-  printf 'machine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} > ./.dynamic_env
+set_dynamic_env() {
+  printf 'machine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} >./.dynamic_env
 }
 
 up_mha_manager() {
@@ -247,7 +246,6 @@ set_mha_conf_after_cache_global_vars_after_d_up() {
   sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_master_ip}'/' ./mha-manager/conf/app1.conf
   sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_slave_ip}'/' ./mha-manager/conf/app1.conf
 }
-
 
 set_mha_ssh_root_passwd() {
   # MHA SSH ROOT PASSWORD 설정
@@ -267,27 +265,27 @@ start_mha() {
 }
 
 set_additional_envs() {
-    if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
+  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
 
-      docker exec ${master_container_name} export machine_master_ip=${machine_master_ip}
-      docker exec ${master_container_name} export machine_slave_ip=${machine_slave_ip}
-      docker exec ${master_container_name} export master_network_interface_name=${master_network_interface_name}
-      docker exec ${master_container_name} export mha_vip=${mha_vip}
+    docker exec ${master_container_name} export machine_master_ip=${machine_master_ip}
+    docker exec ${master_container_name} export machine_slave_ip=${machine_slave_ip}
+    docker exec ${master_container_name} export master_network_interface_name=${master_network_interface_name}
+    docker exec ${master_container_name} export mha_vip=${mha_vip}
 
-    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
-      docker exec ${slave_container_name} export machine_master_ip=${machine_master_ip}
-      docker exec ${slave_container_name} export machine_slave_ip=${machine_slave_ip}
-      docker exec ${slave_container_name} export master_network_interface_name=${master_network_interface_name}
-      docker exec ${slave_container_name} export slave_network_interface_name=${slave_network_interface_name}
-      docker exec ${slave_container_name} export mha_vip=${mha_vip}
+  elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
+    docker exec ${slave_container_name} export machine_master_ip=${machine_master_ip}
+    docker exec ${slave_container_name} export machine_slave_ip=${machine_slave_ip}
+    docker exec ${slave_container_name} export master_network_interface_name=${master_network_interface_name}
+    docker exec ${slave_container_name} export slave_network_interface_name=${slave_network_interface_name}
+    docker exec ${slave_container_name} export mha_vip=${mha_vip}
 
-    elif [[ ${separated_mode_who_am_i} == "mha" || ${separated_mode} == false ]]; then
-      docker exec ${mha_container_name} export machine_master_ip=${machine_master_ip}
-      docker exec ${mha_container_name} export machine_slave_ip=${machine_slave_ip}
-      docker exec ${mha_container_name} export master_network_interface_name=${master_network_interface_name}
-      docker exec ${mha_container_name} export slave_network_interface_name=${slave_network_interface_name}
-      docker exec ${mha_container_name} export mha_vip=${mha_vip}
-    fi
+  elif [[ ${separated_mode_who_am_i} == "mha" || ${separated_mode} == false ]]; then
+    docker exec ${mha_container_name} export machine_master_ip=${machine_master_ip}
+    docker exec ${mha_container_name} export machine_slave_ip=${machine_slave_ip}
+    docker exec ${mha_container_name} export master_network_interface_name=${master_network_interface_name}
+    docker exec ${mha_container_name} export slave_network_interface_name=${slave_network_interface_name}
+    docker exec ${mha_container_name} export mha_vip=${mha_vip}
+  fi
 }
 
 _main() {
@@ -378,7 +376,6 @@ _main() {
   # SLAVE ONLY
   connect_slave_to_master
 
-
   # set_additional_envs
 
   if [[ ${separated_mode} == false || ${separated_mode_who_am_i} == "mha" ]]; then
@@ -407,25 +404,24 @@ _main() {
   # https://jhdatabase.tistory.com/19
 }
 
+check_ssh_validity() {
+  echo "[NOTICE] Test SSH connections from MHA to ${1}"
+  status=$(docker exec ${mha_container_name} sh -c 'exec ssh -o BatchMode=yes -o ConnectTimeout=5 root@'${1}' echo ok 2>&1')
 
-check_ssh_validity(){
-    echo "[NOTICE] Test SSH connections from MHA to ${1}"
-    status=$(docker exec ${mha_container_name} sh -c 'exec ssh -o BatchMode=yes -o ConnectTimeout=5 root@'${1}' echo ok 2>&1')
-
-    if [[ $status == ok ]] ; then
-      echo "${1} Valid"
-    elif [[ $status == "Warning: Permanently added"* ]] ; then
-      echo "${1} Valid ($status)"
-      exit 1
-    elif [[ $status == "Permission denied"* ]] ; then
-      echo "[ERROR] ${1} invalid. Stopping... ($status)"
-      exit 1
-    else
-      echo "[ERROR] ${1} invalid. Stopping... ($status)"
-    fi
+  if [[ $status == ok ]]; then
+    echo "${1} Valid"
+  elif [[ $status == "Warning: Permanently added"* ]]; then
+    echo "${1} Valid ($status)"
+    exit 1
+  elif [[ $status == "Permission denied"* ]]; then
+    echo "[ERROR] ${1} invalid. Stopping... ($status)"
+    exit 1
+  else
+    echo "[ERROR] ${1} invalid. Stopping... ($status)"
+  fi
 }
 
-_main2(){
+_main2() {
 
   echo "[SECURITY] Set .env 600 at all times."
   sudo chmod 600 .env
@@ -449,19 +445,17 @@ _main2(){
 
   up_mha_manager
 
-    # Set global variables BEFORE DOCKER IS UP
-    cache_global_vars
+  # Prevent the error "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED"
+  docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
 
-    # SSH Validity
-    bash ./commands/check-ssh-validity.sh
+  # SSH Validity
+  bash ./commands/check-ssh-validity.sh
 
-    # (Re)start Master
-    #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'
+  # (Re)start Master
+  #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'
 
-    # (Re)start Slave
-    #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' "bash '${machine_slave_project_root_path}'/run.sh"'
-
-
+  # (Re)start Slave
+  #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' "bash '${machine_slave_project_root_path}'/run.sh"'
 
 }
 

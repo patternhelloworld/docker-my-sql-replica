@@ -88,6 +88,7 @@ _main() {
 
   wait_until_db_up "${slave_container_name}" "${slave_root_password}"
 
+  docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
   docker exec ${slave_container_name} sh -c 'service ssh restart'
 
 }
