@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  hello_world:
+    image: hello-world
+    networks:
+      my-sql-replica:
+        ipv4_address: 10.3.0.2
+
+networks:
+  my-sql-replica:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.3.0.0/16
+          gateway: 10.3.0.1

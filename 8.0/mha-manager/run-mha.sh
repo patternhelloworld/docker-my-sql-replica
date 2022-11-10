@@ -211,21 +211,23 @@ check_slave_health() {
 }
 
 lock_all() {
-  echo -e "Lock all the tables in Master"
-  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH TABLES WITH READ LOCK;"
-  elif [[ ${separated_mode_who_am_i} == "slave" && ${separated_mode} == true ]]; then
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "FLUSH TABLES WITH READ LOCK;"
-  fi
+
+  echo "[NOTICE] Read-lock Master"
+  docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${master_root_password}' -h'${machine_master_ip}' -P'${machine_master_db_port}' -e "FLUSH TABLES WITH READ LOCK;"'
+
+  echo "[NOTICE] Read-lock Slave"
+  docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${slave_root_password}' -h'${machine_slave_ip}' -P'${machine_slave_db_port}' -e "FLUSH TABLES WITH READ LOCK;"'
+
 }
 
 unlock_all() {
-  echo -e "Unlock all the tables in Master"
-  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "UNLOCK TABLES;"
-  elif [[ ${separated_mode_who_am_i} == "slave" && ${separated_mode} == true ]]; then
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "UNLOCK TABLES;"
-  fi
+
+  echo "[NOTICE] Read-unlock Master"
+  docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${master_root_password}' -h'${machine_master_ip}' -P'${machine_master_db_port}' -e "UNLOCK TABLES;"'
+
+  echo "[NOTICE] Read-unlock Slave"
+  docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${slave_root_password}' -h'${machine_slave_ip}' -P'${machine_slave_db_port}' -e "UNLOCK TABLES;"'
+
 }
 
 set_dynamic_env() {
@@ -317,56 +319,23 @@ _main() {
 
   lock_all
 
-  if [[ ${slave_emergency_recovery} == true && ${separated_mode} == false ]]; then
+  if [[ ${slave_emergency_recovery} == true ]]; then
 
-    echo "Create Master Back Up SQL"
-    docker exec ${master_container_name} sh -c 'exec mysqldump -uroot -p'${master_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
+    echo "[NOTICE] Create Master Back Up SQL"
+    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "mysqldump -uroot -p'${master_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql"'
 
-    echo "Move SQL"
-    sudo cp -a ${mysql_etc_path_master}/all-databases.sql ${mysql_etc_path_slave}
-
-    echo "Copy Master Data to Slave"
-    docker exec ${slave_container_name} sh -c 'exec mysql -uroot -p'${slave_root_password}' < /var/tmp/all-databases.sql'
-
-    #echo "Change ROOT password"
-    #docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "ALTER USER 'root'@'%' IDENTIFIED BY '${slave_root_password}';"
-    # docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;"
-    # docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "FLUSH PRIVILEGES;"
-    #docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e  "FLUSH TABLES WITH READ LOCK;"
-    #docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e  "UNLOCK TABLES;"
+    echo "[NOTICE]  Copy Master Data to Slave"
+    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "mysql -uroot -p'${slave_root_password}' < /var/tmp/all-databases.sql"'
 
   fi
 
-  if [[ ${master_emergency_recovery} == true && ${separated_mode} == false ]]; then
+  if [[ ${master_emergency_recovery} == true ]]; then
 
-    echo "Create Slave Back Up SQL"
-    docker exec ${slave_container_name} sh -c 'exec mysqldump -uroot -p'${slave_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
+    echo "[NOTICE] Create Slave Back Up SQL"
+    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "mysqldump -uroot -p'${slave_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql"'
 
-    echo "Move SQL"
-    sudo cp -a ${mysql_etc_path_slave}/all-databases.sql ${mysql_etc_path_master}
-
-    echo "Copy Slave Data to Master"
-    docker exec ${master_container_name} sh -c 'exec mysql -uroot -p'${master_root_password}' < /var/tmp/all-databases.sql'
-
-  fi
-
-  if [[ ${separated_mode_who_am_i} == "slave" && ${slave_emergency_recovery} == true && ${separated_mode} == true ]]; then
-
-    echo "Create Master Back Up SQL"
-    docker exec ${slave_container_name} sh -c 'exec mysqldump -h'${machine_master_ip}' -uroot -p'${master_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
-
-    echo "Copy Master Data to Slave"
-    docker exec ${slave_container_name} sh -c 'exec mysql -uroot -p'${slave_root_password}' < /var/tmp/all-databases.sql'
-
-  fi
-
-  if [[ ${separated_mode_who_am_i} == "master" && ${master_emergency_recovery} == true && ${separated_mode} == true ]]; then
-
-    echo "Create Slave Back Up SQL"
-    docker exec ${master_container_name} sh -c 'exec mysqldump -h'${machine_slave_ip}' -uroot -p'${slave_root_password}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
-
-    echo "Copy Slave Data to Master"
-    docker exec ${master_container_name} sh -c 'exec mysql -uroot -p'${slave_root_password}' < /var/tmp/all-databases.sql'
+    echo "[NOTICE] Copy Slave Data to Master"
+    docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "mysql -uroot -p'${master_root_password}' < /var/tmp/all-databases.sql"'
 
   fi
 
@@ -445,11 +414,55 @@ _main2() {
 
   up_mha_manager
 
+  # SSH Validity
   # Prevent the error "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED"
   docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
-
-  # SSH Validity
   bash ./commands/check-ssh-validity.sh
+
+  lock_all
+
+  if [[ ${slave_emergency_recovery} == true ]]; then
+
+    echo "[NOTICE] Create Master Back Up SQL"
+    # docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "mysql -uroot -p'${master_root_password}' -e \"FLUSH TABLES WITH READ LOCK;\""'
+    docker exec ${mha_container_name} sh -c 'mysqldump -uroot -p'${master_root_password}' -h'${machine_master_ip}' -P'${machine_master_db_port}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
+
+    echo "[NOTICE] Slave Docker-Compose down"
+    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; docker-compose down"'
+
+    echo "[NOTICE] Remove Slave DB Data"
+    timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
+    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; mkdir -p '${machine_slave_project_root_path}'/backups/'${timestamp}' ; mv '${mysql_data_path_slave}' '${machine_slave_project_root_path}'/backups/'${timestamp}'"'
+
+    echo -e "[NOTICE] Restart Slave DB"
+    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; bash '${machine_slave_project_root_path}'/run.sh"'
+
+    echo "[NOTICE] Copy Master Data to Slave"
+    docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${slave_root_password}' -h'${machine_slave_ip}' -P'${machine_slave_db_port}' < /var/tmp/all-databases.sql'
+
+  fi
+
+  if [[ ${master_emergency_recovery} == true ]]; then
+
+    echo "[NOTICE] Create Slave Back Up SQL"
+    docker exec ${mha_container_name} sh -c 'mysqldump -uroot -p'${slave_root_password}' -h'${machine_slave_ip}' -P'${machine_slave_db_port}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
+
+    echo "[NOTICE] Master Docker-Compose down"
+    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; docker-compose down"'
+
+    echo "[NOTICE] Remove Master DB Data"
+    timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
+    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; mkdir -p '${machine_master_project_root_path}'/backups/'${timestamp}' ; mv '${mysql_data_path_master}' '${machine_master_project_root_path}'/backups/'${timestamp}'"'
+
+    echo -e "[NOTICE] Restart Master DB"
+    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; bash '${machine_master_project_root_path}'/run.sh"'
+
+    echo "[NOTICE] Copy Slave Data to Master"
+    docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${master_root_password}' -h'${machine_master_ip}' -P'${machine_master_db_port}' < /var/tmp/all-databases.sql'
+
+  fi
+
+  unlock_all
 
   # (Re)start Master
   #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'

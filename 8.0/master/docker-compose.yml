@@ -1,4 +1,4 @@
-version: "3"
+version: "3.7"
 services:
   db-master:
     container_name: ${MASTER_CONTAINER_NAME}
@@ -6,6 +6,9 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    image: my-sql-replica-master
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       CONTAINER_NAME: ${MASTER_CONTAINER_NAME}
       MYSQL_USER: ${MYSQL_REMOTE_USER_MASTER}
@@ -24,18 +27,10 @@ services:
       - ${MYSQL_ETC_PATH_MASTER}:/var/tmp
       - ./my.cnf:/etc/mysql/my.cnf
     networks:
-       net-mysql:
-          ipv4_address: ${DOCKER_MASTER_IP}
-
-# Names our volume
-volumes:
-  my-db-master:
-  my-db-slave: 
+      network_my-sql-replica:
+        ipv4_address: ${DOCKER_MASTER_IP}
 
 networks:
-  net-mysql:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.3.0.0/16
-          gateway: 10.3.0.1
+  network_my-sql-replica:
+      external: true
+      name: network_my-sql-replica

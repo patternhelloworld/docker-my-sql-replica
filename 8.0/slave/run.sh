@@ -74,12 +74,6 @@ _main() {
     docker-compose build || exit 1
   fi
 
-  if [[ ${slave_emergency_recovery} == true ]]; then
-    docker-compose down
-    sudo rm -rf ${mysql_data_path_slave}
-    echo -e "[IMPORTANT] Removed all slave data as 'slave_emergency_recovery' is on."
-  fi
-
   re_up_slave
 
   # If the following error comes up, that means the DB is not yet up, so we need to give it a proper time to be up.
@@ -88,7 +82,7 @@ _main() {
 
   wait_until_db_up "${slave_container_name}" "${slave_root_password}"
 
-  docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
+  #docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
   docker exec ${slave_container_name} sh -c 'service ssh restart'
 
 }

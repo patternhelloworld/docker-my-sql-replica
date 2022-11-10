@@ -54,11 +54,23 @@ prepare_ssh_keys_none_separated_mode() {
 
 cache_set_vip() {
 
-    master_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
-    mha_vip=${machine_mha_vip}
+    if [[ ${separated_mode} == true ]]; then
 
-    echo "[NOTICE] Set MHA VIP on Master"
-    ifconfig ${master_network_interface_name}:1 ${mha_vip}
+      master_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+      mha_vip=${machine_mha_vip}
+
+      echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
+      ifconfig ${master_network_interface_name}:1 ${mha_vip}
+
+    elif [[ ${separated_mode} == false ]]; then
+
+      master_network_interface_name=eth0
+      mha_vip=${machine_mha_vip}
+
+      echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
+      docker exec ${master_container_name} sh -c "ifconfig ${master_network_interface_name}:1 ${mha_vip}"
+
+    fi
 
 }
 
@@ -125,7 +137,7 @@ _main() {
 
   show_current_db_status
 
-  docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
+  #docker exec ${mha_container_name} sh -c 'rm -f /root/.ssh/known_hosts'
   docker exec ${master_container_name} sh -c 'service ssh restart'
 
 }

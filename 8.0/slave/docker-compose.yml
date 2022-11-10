@@ -1,4 +1,4 @@
-version: "3"
+version: "3.7"
 services:
   db-slave:
     container_name: ${SLAVE_CONTAINER_NAME}
@@ -6,6 +6,8 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       MHA_SHARE_SSHKEYS_PATH: /root/mha-ssh/sshkeys
       CONTAINER_NAME: ${SLAVE_CONTAINER_NAME}
@@ -25,14 +27,10 @@ services:
       - ${MYSQL_ETC_PATH_SLAVE}:/var/tmp
       - ./my.cnf:/etc/mysql/my.cnf
     networks:
-      master_net-mysql:
+      network_my-sql-replica:
         ipv4_address: ${DOCKER_SLAVE_IP}
 
-# Names our volume
-volumes:
-  my-db-slave: 
-
 networks:
-  master_net-mysql:
-    external:
-      name: master_net-mysql
+  network_my-sql-replica:
+    external: true
+    name: network_my-sql-replica
