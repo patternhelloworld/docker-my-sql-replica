@@ -1,6 +1,7 @@
-FROM ubuntu:18.04
+FROM mysql:8.0.30-debian
+
 RUN apt-get update -qqy && apt-get -qqy install \
-iputils-ping curl runit wget unzip vim openssh-server ssh sshpass perl libdbi-perl libmodule-install-perl libdbd-mysql-perl libconfig-tiny-perl liblog-dispatch-perl libparallel-forkmanager-perl make net-tools iproute2 mysql-client && \
+iputils-ping curl runit wget unzip vim openssh-server ssh sshpass perl libdbi-perl libmodule-install-perl libdbd-mysql-perl libconfig-tiny-perl liblog-dispatch-perl libparallel-forkmanager-perl make net-tools iproute2 && \
 apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp

@@ -247,10 +247,10 @@ sub main {
       #$new_master_handler->enable_log_bin_local();
       #$new_master_handler->disconnect();
 
-	  if ( $new_master_ip eq $ENV{db_master_ip_from_the_others} ) {
+	  if ( $new_master_ip eq $ENV{machine_master_ip} ) {
         system("/bin/sh /usr/local/mha/work/custom-scripts/master_vip_up.sh");
       }
-      elsif ( $new_master_ip eq $ENV{db_slave_ip_from_the_others} ) {
+      elsif ( $new_master_ip eq $ENV{machine_slave_ip} ) {
         system("/bin/sh /usr/local/mha/work/custom-scripts/slave_vip_up.sh");
       }
       else {}

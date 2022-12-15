@@ -14,7 +14,7 @@ source ./util.sh
 initialize_files() {
   # sudo rm -f ./master/etc/all-databases.sql
   # sudo rm -f ./slave/etc/all-databases.sql
-  sudo rm -f ./mha-manager/work/app1.failover.complete
+  sudo rm -f ./work/app1.failover.complete
 }
 
 create_host_folders_if_not_exists() {
@@ -93,33 +93,11 @@ prepare_ssh_keys_none_separated_mode() {
 }
 
 get_db_master_bin_log_file() {
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $1'})
-    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode_who_am_i} == "mha" ]]; then
-      echo $(docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $1'})
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $1'})
-  else
-    echo "SEPARATED_MODE on .env : empty"
-    exit 1
-  fi
+  echo $(docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "show master status" -s | tail -n 1 | awk {'print $1'})
 }
 
 get_db_master_bin_log_pos() {
-  if [[ ${separated_mode} == true ]]; then
-    if [[ ${separated_mode_who_am_i} == "master" ]]; then
-      echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $2'})
-    elif [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode_who_am_i} == "mha" ]]; then
-      echo $(docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -h${separated_mode_master_ip} -P${separated_mode_master_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
-    fi
-  elif [[ ${separated_mode} == false ]]; then
-    echo $(docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "show master status" -s | tail -n 1 | awk {'print $2'})
-  else
-    echo "[ERROR] SEPARATED_MODE on .env : empty (get_db_master_bin_log_pos)"
-    exit 1
-  fi
+  echo $(docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
 }
 
 cache_global_vars_after_d_up() {
@@ -130,17 +108,11 @@ cache_global_vars_after_d_up() {
 }
 
 create_replication_user() {
-  if [[ ${separated_mode_who_am_i} == "master" || ${separated_mode} == false ]]; then
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${machine_slave_ip}' IDENTIFIED BY '${replication_password}';"
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${machine_slave_ip}' WITH GRANT OPTION;"
-    docker exec ${master_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
-  fi
 
-  if [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${machine_master_ip}' IDENTIFIED BY '${replication_password}';"
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${machine_master_ip}' WITH GRANT OPTION;"
-    docker exec ${slave_container_name} mysql -uroot -p${master_root_password} -e "FLUSH PRIVILEGES;"
-  fi
+  docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "CREATE USER IF NOT EXISTS '${replication_user}'@'${machine_slave_ip}' IDENTIFIED BY '${replication_password}';"
+  docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "GRANT ALL PRIVILEGES ON *.* TO '${replication_user}'@'${machine_slave_ip}' WITH GRANT OPTION;"
+  docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "FLUSH PRIVILEGES;"
+
 }
 
 show_current_db_status() {
@@ -162,25 +134,20 @@ show_current_db_status() {
 }
 
 connect_slave_to_master() {
-  if [[ ${separated_mode_who_am_i} == "slave" || ${separated_mode} == false ]]; then
+  # echo $(docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
 
-    echo -e "Stopping Slave..."
-    docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "STOP SLAVE;"
-    docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "RESET SLAVE ALL;"
+  echo -e "Stopping Slave..."
+  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "STOP SLAVE;"
+  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "RESET SLAVE ALL;"
 
-    echo -e "Point Slave to Master (IP : ${machine_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
+  echo -e "Point Slave to Master (IP : ${machine_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
 
-    if [[ ${separated_mode} == true ]]; then
-      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1, MASTER_PORT=${separated_mode_master_port};"
-    else
-      docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
-    fi
+  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_PORT=${machine_master_db_port}, MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
 
-    echo -e "Starting Slave..."
-    docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "START SLAVE;"
-    echo -e "Current Replication Status"
-    docker exec ${slave_container_name} mysql -uroot -p${slave_root_password} -e "SHOW SLAVE STATUS\G;"
-  fi
+  echo -e "Starting Slave..."
+  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "START SLAVE;"
+  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "SHOW SLAVE STATUS\G;"
+
 }
 
 slave_health() {
@@ -231,7 +198,7 @@ unlock_all() {
 }
 
 set_dynamic_env() {
-  printf 'machine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} >./.dynamic_env
+  printf 'machine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmachine_master_db_port='${machine_master_db_port}'\nmachine_slave_db_port='${machine_slave_db_port}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} >./.dynamic_env
 }
 
 up_mha_manager() {
@@ -242,11 +209,18 @@ up_mha_manager() {
 set_mha_conf_after_cache_global_vars_after_d_up() {
   # Set MHA configuration
   # sed -i -E "s/(post_max_size\s*=\s*)[^\n\r]+/\1100M/" /usr/local/etc/php/php.ini
-  sed -i -E 's/^(password=).*$/\1'${master_root_password}'/' ./mha-manager/conf/app1.conf
-  sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./mha-manager/conf/app1.conf
-  sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./mha-manager/conf/app1.conf
-  sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_master_ip}'/' ./mha-manager/conf/app1.conf
-  sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_slave_ip}'/' ./mha-manager/conf/app1.conf
+  sed -i -E 's/^(password=).*$/\1'${master_root_password}'/' ./conf/app1.conf
+  sed -i -E 's/^(ssh_port=).*$/\1'${machine_mha_ssh_port}'/' ./conf/app1.conf
+  sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./conf/app1.conf
+  sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./conf/app1.conf
+
+  sed -i -E -z 's/(\[server1\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\1'${machine_master_db_port}'/' ./conf/app1.conf
+  sed -i -E -z 's/(\[server1\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\1'${machine_master_ssh_port}'/' ./conf/app1.conf
+  sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_master_ip}'/' ./conf/app1.conf
+
+  sed -i -E -z 's/(\[server2\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\1'${machine_slave_db_port}'/' ./conf/app1.conf
+  sed -i -E -z 's/(\[server2\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\1'${machine_slave_ssh_port}'/' ./conf/app1.conf
+  sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_slave_ip}'/' ./conf/app1.conf
 }
 
 set_mha_ssh_root_passwd() {
@@ -256,8 +230,9 @@ set_mha_ssh_root_passwd() {
 }
 
 make_changes_to_mha_library() {
-  docker exec -it ${mha_container_name} chmod 664 /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
-  docker exec -it ${mha_container_name} sed -i -E -z "s/(\use warnings FATAL => 'all';[\n\r\t\s]*)/\1no warnings qw( redundant );/" /usr/local/share/perl/5.26.1/MHA/NodeUtil.pm
+  # * : Perl versions
+  docker exec -it ${mha_container_name} chmod 664 /usr/local/share/perl/5.32.1/MHA/NodeUtil.pm
+  docker exec -it ${mha_container_name} sed -i -E -z "s/(\use warnings FATAL => 'all';[\n\r\t\s]*)/\1no warnings qw( redundant );/" /usr/local/share/perl/5.32.1/MHA/NodeUtil.pm
 }
 
 start_mha() {
@@ -288,6 +263,16 @@ set_additional_envs() {
     docker exec ${mha_container_name} export slave_network_interface_name=${slave_network_interface_name}
     docker exec ${mha_container_name} export mha_vip=${mha_vip}
   fi
+}
+
+cache_set_vip() {
+    master_network_interface_name=eth0
+    slave_network_interface_name=eth0
+
+    mha_vip=${machine_mha_vip}
+
+    echo "[NOTICE] Set MHA VIP on Master (${master_network_interface_name}:1 ${mha_vip})"
+    ifconfig ${master_network_interface_name}:1 ${mha_vip}
 }
 
 _main() {
@@ -364,7 +349,7 @@ _main() {
   if [[ ${separated_mode} == false || ${separated_mode_who_am_i} == "mha" ]]; then
 
     echo "Remove 'app1.failover.complete' to start MHA"
-    rm ./mha-manager/work/app1.failover.complete
+    rm ./work/app1.failover.complete
     sleep 1
     start_mha
 
@@ -412,6 +397,8 @@ _main2() {
     docker-compose build || exit 1
   fi
 
+  cache_set_vip
+
   up_mha_manager
 
   # SSH Validity
@@ -428,14 +415,31 @@ _main2() {
     docker exec ${mha_container_name} sh -c 'mysqldump -uroot -p'${master_root_password}' -h'${machine_master_ip}' -P'${machine_master_db_port}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
 
     echo "[NOTICE] Slave Docker-Compose down"
-    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; docker-compose down"'
+    if [[ ${separated_mode} == true ]]; then
+      docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; docker-compose down"'
+    elif [[ ${separated_mode} == false ]]; then
+      docker-compose -f ../slave/docker-compose.yml down
+    fi
 
     echo "[NOTICE] Remove Slave DB Data"
     timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
-    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; mkdir -p '${machine_slave_project_root_path}'/backups/'${timestamp}' ; mv '${mysql_data_path_slave}' '${machine_slave_project_root_path}'/backups/'${timestamp}'"'
+    if [[ ${separated_mode} == true ]]; then
+      docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; mkdir -p '${machine_slave_project_root_path}'/backups/'${timestamp}' ; mv '${mysql_data_path_slave}' '${machine_slave_project_root_path}'/backups/'${timestamp}'"'
+    elif [[ ${separated_mode} == false ]]; then
+      sudo mkdir -p ../slave/backups/${timestamp} && sudo mv ${mysql_data_path_slave} ../slave/backups/${timestamp}
+    fi
 
     echo -e "[NOTICE] Restart Slave DB"
-    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; bash '${machine_slave_project_root_path}'/run.sh"'
+    if [[ ${separated_mode} == true ]]; then
+      docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_slave_ip}' -p '${machine_slave_ssh_port}' "cd '${machine_slave_project_root_path}' ; bash '${machine_slave_project_root_path}'/run.sh"'
+    elif [[ ${separated_mode} == false ]]; then
+      cd ../slave && sudo bash run.sh
+      cd ../mha-manager
+    fi
+
+    echo "[NOTICE] Sleep for 15 secs"
+    # To prevent the following error "ERROR 2013 (HY000): Lost connection to MySQL server at 'reading initial communication packet', system error: 22"..
+    sleep 15
 
     echo "[NOTICE] Copy Master Data to Slave"
     docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${slave_root_password}' -h'${machine_slave_ip}' -P'${machine_slave_db_port}' < /var/tmp/all-databases.sql'
@@ -445,30 +449,61 @@ _main2() {
   if [[ ${master_emergency_recovery} == true ]]; then
 
     echo "[NOTICE] Create Slave Back Up SQL"
+    # docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "mysql -uroot -p'${master_root_password}' -e \"FLUSH TABLES WITH READ LOCK;\""'
     docker exec ${mha_container_name} sh -c 'mysqldump -uroot -p'${slave_root_password}' -h'${machine_slave_ip}' -P'${machine_slave_db_port}' --all-databases --single-transaction > /var/tmp/all-databases.sql'
 
     echo "[NOTICE] Master Docker-Compose down"
-    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; docker-compose down"'
+    if [[ ${separated_mode} == true ]]; then
+      docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; docker-compose down"'
+    elif [[ ${separated_mode} == false ]]; then
+      docker-compose -f ../master/docker-compose.yml down
+    fi
 
     echo "[NOTICE] Remove Master DB Data"
     timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
-    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; mkdir -p '${machine_master_project_root_path}'/backups/'${timestamp}' ; mv '${mysql_data_path_master}' '${machine_master_project_root_path}'/backups/'${timestamp}'"'
+    if [[ ${separated_mode} == true ]]; then
+      docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; mkdir -p '${machine_master_project_root_path}'/backups/'${timestamp}' ; mv '${mysql_data_path_master}' '${machine_master_project_root_path}'/backups/'${timestamp}'"'
+    elif [[ ${separated_mode} == false ]]; then
+      sudo mkdir -p ../master/backups/${timestamp} && sudo mv ${mysql_data_path_master} ../master/backups/${timestamp}
+    fi
 
     echo -e "[NOTICE] Restart Master DB"
-    docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; bash '${machine_master_project_root_path}'/run.sh"'
+    if [[ ${separated_mode} == true ]]; then
+      docker exec ${mha_container_name} sh -c 'exec ssh -t root@'${machine_master_ip}' -p '${machine_master_ssh_port}' "cd '${machine_master_project_root_path}' ; bash '${machine_master_project_root_path}'/run.sh"'
+    elif [[ ${separated_mode} == false ]]; then
+      cd ../master && sudo bash run.sh
+      cd ../mha-manager
+    fi
 
-    echo "[NOTICE] Copy Slave Data to Master"
+    echo "[NOTICE] Sleep for 15 secs"
+    # To prevent the following error "ERROR 2013 (HY000): Lost connection to MySQL server at 'reading initial communication packet', system error: 22"..
+    sleep 15
+
+    echo "[NOTICE] Copy Master Data to Slave"
     docker exec ${mha_container_name} sh -c 'mysql -uroot -p'${master_root_password}' -h'${machine_master_ip}' -P'${machine_master_db_port}' < /var/tmp/all-databases.sql'
 
   fi
 
+  # Set global variables AFTER DB IS UP
+  # Master and Slave IPs are now set
+  cache_global_vars_after_d_up
+  # SLAVE ONLY
+  connect_slave_to_master
+
+  # set_additional_envs
+
+  set_mha_conf_after_cache_global_vars_after_d_up
+
+  set_mha_ssh_root_passwd
+
+  make_changes_to_mha_library
+
   unlock_all
 
-  # (Re)start Master
-  #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_master_ip}' "bash '${machine_master_project_root_path}'/run.sh"'
-
-  # (Re)start Slave
-  #docker exec ${mha_container_name} sh -c 'exec ssh root@'${machine_slave_ip}' "bash '${machine_slave_project_root_path}'/run.sh"'
+  echo "Remove 'app1.failover.complete' to start MHA"
+  rm ./work/app1.failover.complete
+  sleep 1
+  start_mha
 
 }
 

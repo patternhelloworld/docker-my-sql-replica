@@ -10,6 +10,7 @@ services:
     build:
       context: ./
       dockerfile: Dockerfile
+    image: my-sql-replica-mha-manager
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always
@@ -24,10 +25,10 @@ services:
       - '23506:3306'
     volumes:
       - "../shares/.ssh/mha-manager:/root/.ssh"
-      - "./mha-manager/mha-ssh:/root/mha-ssh/"
-      - "./mha-manager/conf:/etc/mha"
-      - "./mha-manager/work:/usr/local/mha/work"
-      - "./mha-manager/log:/usr/local/mha/log"
+      - "./mha-ssh:/root/mha-ssh/"
+      - "./conf:/etc/mha"
+      - "./work:/usr/local/mha/work"
+      - "./log:/usr/local/mha/log"
     # Where our data will be persisted
     networks:
       network_my-sql-replica:

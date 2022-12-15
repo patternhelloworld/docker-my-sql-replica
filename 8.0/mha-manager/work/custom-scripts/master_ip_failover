@@ -50,10 +50,10 @@ sub main {
 
    print "VIP UP...\n";
 
-  # if ( $new_master_ip eq $ENV{db_master_ip_from_the_others} ) {
+  # if ( $new_master_ip eq $ENV{machine_master_ip} ) {
    #   system("/bin/sh /usr/local/mha/work/custom-scripts/master_vip_up.sh");
    # }
-   # elsif ( $new_master_ip eq $ENV{db_slave_ip_from_the_others} ) {
+   # elsif ( $new_master_ip eq $ENV{machine_slave_ip} ) {
     #  system("/bin/sh /usr/local/mha/work/custom-scripts/slave_vip_up.sh");
     #}
    # else {}
@@ -97,11 +97,11 @@ sub main {
       print "Set read_only=0 on the new master.\n";
       $new_master_handler->disable_read_only();
       print $new_master_ip;
-      print $ENV{db_master_ip_from_the_others};
-        if ( $new_master_ip eq $ENV{db_master_ip_from_the_others} ) {
+      print $ENV{machine_master_ip};
+        if ( $new_master_ip eq $ENV{machine_master_ip} ) {
           system("/bin/sh /usr/local/mha/work/custom-scripts/master_vip_up.sh");
         }
-        elsif ( $new_master_ip eq $ENV{db_slave_ip_from_the_others} ) {
+        elsif ( $new_master_ip eq $ENV{machine_slave_ip} ) {
           system("/bin/sh /usr/local/mha/work/custom-scripts/slave_vip_up.sh");
         }
         else {}

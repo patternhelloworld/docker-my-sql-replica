@@ -8,6 +8,8 @@ cache_global_vars() {
 
   docker_mha_ip=$(get_value_from_env "DOCKER_MHA_IP")
 
+  machine_mha_vip=$(get_value_from_env "MACHINE_MHA_VIP")
+
   machine_mha_ip=$(get_value_from_env "MACHINE_MHA_IP")
   machine_mha_ssh_port=$(get_value_from_env "MACHINE_MHA_SSH_PORT")
 

@@ -37,6 +37,9 @@ re_up_master() {
 
   docker-compose down
 
+  if [[ "$(docker network ls | grep "network_my-sql-replica")" == "" ]] ; then
+    echo "Run bash ../network/up.sh in advance. Exiting..." && exit 1
+  fi
   docker-compose up -d db-master
 
 }
