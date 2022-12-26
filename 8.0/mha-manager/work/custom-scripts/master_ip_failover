@@ -48,7 +48,7 @@ exit &main();
 
 sub main {
 
-   print "VIP UP...\n";
+   # print "VIP UP...\n";
 
   # if ( $new_master_ip eq $ENV{machine_master_ip} ) {
    #   system("/bin/sh /usr/local/mha/work/custom-scripts/master_vip_up.sh");
@@ -59,7 +59,7 @@ sub main {
    # else {}
 
 
-  print "master_ip_failover script is now starting...\n";
+  print "[NOTICE] master_ip_failover.sh script is now starting...\n";
 
   if ( $command eq "stop" || $command eq "stopssh" ) {
 

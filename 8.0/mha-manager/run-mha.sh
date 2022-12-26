@@ -136,17 +136,31 @@ show_current_db_status() {
 connect_slave_to_master() {
   # echo $(docker exec ${mha_container_name} mysql -uroot -p${master_root_password} -h${machine_master_ip} -P${machine_master_db_port} -e "show master status" -s | tail -n 1 | awk {'print $2'})
 
-  echo -e "Stopping Slave..."
-  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "STOP SLAVE;"
-  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "RESET SLAVE ALL;"
+  if [[ ${separated_mode} == false ]]; then
+      echo -e "Stopping Slave..."
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "STOP SLAVE;"
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "RESET SLAVE ALL;"
 
-  echo -e "Point Slave to Master (IP : ${machine_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
+      echo -e "Point Slave to Master (IP : ${docker_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
 
-  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_PORT=${machine_master_db_port}, MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "CHANGE MASTER TO MASTER_HOST='${docker_master_ip}', MASTER_PORT=3306, MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
 
-  echo -e "Starting Slave..."
-  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "START SLAVE;"
-  docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "SHOW SLAVE STATUS\G;"
+      echo -e "Starting Slave..."
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "START SLAVE;"
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "SHOW SLAVE STATUS\G;"
+  else
+      echo -e "Stopping Slave..."
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "STOP SLAVE;"
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "RESET SLAVE ALL;"
+
+      echo -e "Point Slave to Master (IP : ${machine_master_ip}, Bin Log File : ${db_master_bin_log_file}, Bin Log File Pos : ${db_master_bin_log_pos})"
+
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "CHANGE MASTER TO MASTER_HOST='${machine_master_ip}', MASTER_PORT=${machine_master_db_port}, MASTER_USER='${replication_user}', MASTER_PASSWORD='${replication_password}', MASTER_LOG_FILE='${db_master_bin_log_file}', MASTER_LOG_POS=${db_master_bin_log_pos}, GET_MASTER_PUBLIC_KEY=1;"
+
+      echo -e "Starting Slave..."
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "START SLAVE;"
+      docker exec ${mha_container_name} mysql -uroot -p${slave_root_password} -h${machine_slave_ip} -P${machine_slave_db_port} -e "SHOW SLAVE STATUS\G;"
+  fi
 
 }
 
@@ -198,7 +212,11 @@ unlock_all() {
 }
 
 set_dynamic_env() {
-  printf 'machine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmachine_master_db_port='${machine_master_db_port}'\nmachine_slave_db_port='${machine_slave_db_port}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} >./.dynamic_env
+  if [[ ${separated_mode} == false ]]; then
+    printf 'separated_mode='${separated_mode}'\nmha_sshd_password='${mha_sshd_password}'\nmachine_master_ip='${docker_master_ip}'\nmachine_slave_ip='${docker_slave_ip}'\nmachine_master_db_port=3306\nmachine_slave_db_port=3306\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} >./.dynamic_env
+  else
+    printf 'separated_mode='${separated_mode}'\nmha_sshd_password='${mha_sshd_password}'\nmachine_master_ip='${machine_master_ip}'\nmachine_slave_ip='${machine_slave_ip}'\nmachine_master_db_port='${machine_master_db_port}'\nmachine_slave_db_port='${machine_slave_db_port}'\nmaster_network_interface_name='${master_network_interface_name}'\nslave_network_interface_name='${slave_network_interface_name}'\nmha_vip='${mha_vip} >./.dynamic_env
+  fi
 }
 
 up_mha_manager() {
@@ -214,13 +232,24 @@ set_mha_conf_after_cache_global_vars_after_d_up() {
   sed -i -E 's/^(repl_user=).*$/\1'${replication_user}'/' ./conf/app1.conf
   sed -i -E 's/^(repl_password=).*$/\1'${replication_password}'/' ./conf/app1.conf
 
-  sed -i -E -z 's/(\[server1\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\1'${machine_master_db_port}'/' ./conf/app1.conf
-  sed -i -E -z 's/(\[server1\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\1'${machine_master_ssh_port}'/' ./conf/app1.conf
-  sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_master_ip}'/' ./conf/app1.conf
+  if [[ ${separated_mode} == false ]]; then
+     sed -i -E -z 's/(\[server1\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\13306/' ./conf/app1.conf
+     sed -i -E -z 's/(\[server1\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\122/' ./conf/app1.conf
+     sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${docker_master_ip}'/' ./conf/app1.conf
 
-  sed -i -E -z 's/(\[server2\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\1'${machine_slave_db_port}'/' ./conf/app1.conf
-  sed -i -E -z 's/(\[server2\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\1'${machine_slave_ssh_port}'/' ./conf/app1.conf
-  sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_slave_ip}'/' ./conf/app1.conf
+     sed -i -E -z 's/(\[server2\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\13306/' ./conf/app1.conf
+     sed -i -E -z 's/(\[server2\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\122/' ./conf/app1.conf
+     sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${docker_slave_ip}'/' ./conf/app1.conf
+  else
+      sed -i -E -z 's/(\[server1\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\1'${machine_master_db_port}'/' ./conf/app1.conf
+      sed -i -E -z 's/(\[server1\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\1'${machine_master_ssh_port}'/' ./conf/app1.conf
+      sed -i -E -z 's/(\[server1\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_master_ip}'/' ./conf/app1.conf
+
+      sed -i -E -z 's/(\[server2\][^\[]*?[^_]port[\t\s]*=)[^\n\r]*/\1'${machine_slave_db_port}'/' ./conf/app1.conf
+      sed -i -E -z 's/(\[server2\][^\[]*?ssh_port[\t\s]*=)[^\n\r]*/\1'${machine_slave_ssh_port}'/' ./conf/app1.conf
+      sed -i -E -z 's/(\[server2\][\n\r\t\s]*hostname[\t\s]*=)[^\n\r]*/\1'${machine_slave_ip}'/' ./conf/app1.conf
+  fi
+
 }
 
 set_mha_ssh_root_passwd() {
@@ -266,13 +295,23 @@ set_additional_envs() {
 }
 
 cache_set_vip() {
-    master_network_interface_name=eth0
-    slave_network_interface_name=eth0
 
-    mha_vip=${machine_mha_vip}
+    if [[ ${separated_mode} == false ]]; then
+        master_network_interface_name=$(docker exec ${master_container_name} ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+        slave_network_interface_name=$(docker exec ${slave_container_name} ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+        mha_vip=${machine_mha_vip}
 
-    echo "[NOTICE] Set MHA VIP on Master (${master_network_interface_name}:1 ${mha_vip})"
-    ifconfig ${master_network_interface_name}:1 ${mha_vip}
+        echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
+        docker exec ${master_container_name} ifconfig eth0:0 ${mha_vip}
+    else
+        master_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+        mha_vip=${machine_mha_vip}
+
+        echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
+        sudo ifconfig ${master_network_interface_name}:0 down
+        sudo ifconfig ${master_network_interface_name}:0 ${mha_vip}
+
+    fi
 }
 
 _main() {

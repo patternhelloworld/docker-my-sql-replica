@@ -7,6 +7,8 @@ cache_global_vars() {
   docker_layer_corruption_recovery=$(get_value_from_env "DOCKER_LAYER_CORRUPTION_RECOVERY")
 
   docker_mha_ip=$(get_value_from_env "DOCKER_MHA_IP")
+  docker_master_ip=$(get_value_from_env "DOCKER_MASTER_IP")
+  docker_slave_ip=$(get_value_from_env "DOCKER_SLAVE_IP")
 
   machine_mha_vip=$(get_value_from_env "MACHINE_MHA_VIP")
 

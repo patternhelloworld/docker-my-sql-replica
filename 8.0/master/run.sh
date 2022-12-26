@@ -57,21 +57,20 @@ prepare_ssh_keys_none_separated_mode() {
 
 cache_set_vip() {
 
-    if [[ ${separated_mode} == true ]]; then
+    if [[ ${separated_mode} == false ]]; then
+        master_network_interface_name=$(docker exec ${master_container_name} ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+        slave_network_interface_name=$(docker exec ${slave_container_name} ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+        mha_vip=${machine_mha_vip}
 
-      master_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
-      mha_vip=${machine_mha_vip}
+        echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
+        docker exec ${master_container_name} ifconfig eth0:0 ${mha_vip}
+    else
+        master_network_interface_name=$(ip addr show | awk '/inet.*brd/{print $NF; exit}' || exit 1)
+        mha_vip=${machine_mha_vip}
 
-      echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
-      ifconfig ${master_network_interface_name}:1 ${mha_vip}
-
-    elif [[ ${separated_mode} == false ]]; then
-
-      master_network_interface_name=eth0
-      mha_vip=${machine_mha_vip}
-
-      echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
-      docker exec ${master_container_name} sh -c "ifconfig ${master_network_interface_name}:1 ${mha_vip}"
+        echo "[NOTICE] Set MHA VIP on Master (on a different machine = ${separated_mode})"
+        sudo ifconfig ${master_network_interface_name}:0 down
+        sudo ifconfig ${master_network_interface_name}:0 ${mha_vip}
 
     fi
 
